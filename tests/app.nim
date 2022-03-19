@@ -1,24 +1,29 @@
 import serclim
 
 server:
-  import prologue
-  import prologue/middlewares/staticfile
+  import std/httpcore
   import htmlgen
 
 client:
-  import dom
+  import std/asyncjs
+  import std/dom
   import strutils
 
 
 server:
   
-  var app = newApp()
+  var app = newServerApp()
+
+  func bla: string {. ajax(app, "/blajax"), route(app, "/bla", HttpGet) .} = "bla"
 
   func addit(a,b: int): int {. ajax(app, "/add") .} =
     a + b
 
-  proc index(ctx: Context) {. get(app, "/") .} =
-    resp html(
+  proc clientjs: string {. route(app, "/static/client.js", HttpGet) .} =
+    readFile("static/client.js")
+
+  proc index: string {. route(app, "/", HttpGet) .} =
+    html(
       script(src="/static/client.js"),
       form(
         input(type="text", name="a"),
@@ -28,23 +33,27 @@ server:
       )
     )
 
-  app.use(staticFileMiddleware("static"))
+  proc index(uid: int64): string {. route(app, "/user/{uid}", HttpGet), route(app, "/{uid}", HttpGet) .} =
+    h1("hi user" & $uid)
+
   app.run()
 
 
 client:
-
-  window.add_event_listener("load", proc(_: Event) =
+  
+  window.addEventListener("load", proc(_: Event) =
 
     let form = document.forms[0]
 
-    form.add_event_listener("submit", proc(ev: Event) =
-      ev.prevent_default
-      addit(
+    proc calc() {.async.} =
+      echo await addit(
         ($form.elements[0].value).parse_int,
-        ($form.elements[1].value).parse_int,
-        proc(res: int) = echo res
+        ($form.elements[1].value).parse_int
       )
+
+    form.addEventListener("submit", proc(ev: Event) =
+      ev.prevent_default
+      discard calc()
     )
 
   )

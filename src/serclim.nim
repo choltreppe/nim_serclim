@@ -4,11 +4,15 @@ import std/compilesettings
 import flatty
 export flatty
 
+import fusion/matching
+export matching
+{.experimental: "caseStmtMacros".}
 
-func serializeCall(data: NimNode): NimNode =
+
+proc serializeCall(data: NimNode): NimNode =
   newCall(ident("toFlatty"), data)
 
-template deserializeCall(data: NimNode, typedecl: NimNode): NimNode =
+proc deserializeCall(data: NimNode, typedecl: NimNode): NimNode =
   newCall(ident("fromFlatty"), data, typedecl)
 
 
