@@ -10,6 +10,6 @@ requires "flatty >= 0.2.4"
 
 
 task testapp, "run test app":
-  exec "nim c -o:tests/_build/app tests/app.nim"
-  exec "nim js -o:tests/_build/static/client.js tests/app.nim"
-  exec "cd tests/_build/ && ./app"
+  exec "nim c -o:testapp/_build/app testapp/app.nim"
+  exec "nim js -o:testapp/_build/static/client.js testapp/app.nim"
+  exec "cd testapp/_build/ && ./app"

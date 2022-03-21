@@ -1,7 +1,6 @@
 import serclim
 
 server:
-  import std/httpcore
   import htmlgen
 
 client:
@@ -12,19 +11,16 @@ client:
 
 server:
   
-  var app = newServerApp()
+  var app = newServerApp(client_path = "static/client.js")
 
-  func bla: string {. ajax(app, "/blajax"), route(app, "/bla", HttpGet) .} = "bla"
+  func bla: string {. ajax(app, "/blajax"), get(app, "/bla/*") .} =
+    "bla"
 
-  func addit(a,b: int): int {. ajax(app, "/add") .} =
-    a + b
+  proc addit(a,b: int): Future[int] {. async, ajax(app, "/add") .} =
+    return a + b
 
-  proc clientjs: string {. route(app, "/static/client.js", HttpGet) .} =
-    readFile("static/client.js")
-
-  proc index: string {. route(app, "/", HttpGet) .} =
-    html(
-      script(src="/static/client.js"),
+  proc index: Response {. route(app, "/", HttpGet) .} =
+    respOk(
       form(
         input(type="text", name="a"),
         input(type="text", name="b"),
@@ -33,8 +29,8 @@ server:
       )
     )
 
-  proc index(uid: int64): string {. route(app, "/user/{uid}", HttpGet), route(app, "/{uid}", HttpGet) .} =
-    h1("hi user" & $uid)
+  proc index(uid: int64): Future[string] {. async, route(app, "/user/{uid}", HttpGet), route(app, "/{uid}", HttpGet) .} =
+    return h1("hi user" & $uid)
 
   app.run()
 

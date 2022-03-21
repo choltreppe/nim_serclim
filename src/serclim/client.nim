@@ -1,3 +1,6 @@
+import serclim/private/common
+
+import std/macros
 import std/sequtils
 import std/dom
 import std/asyncjs
@@ -54,27 +57,30 @@ macro server*(body: untyped): untyped =
 
 
 # make ajax callers
-macro ajax*(app: untyped, path: string, body: untyped): untyped =
+macro ajax*(app: untyped, path: string, procedure: untyped): untyped =
   app.expectKind(nnkIdent)
-  body.expectKind({nnkProcDef, nnkFuncDef})
+  procedure.expectKind({nnkProcDef, nnkFuncDef})
 
   # proc for manipulating
-  var remote_proc = body
+  var proc_edit = procedure
   # if func turn into proc
-  if body.kind == nnkFuncDef:
-    remote_proc = newNimNode(nnkProcDef)
-    for child in body: remote_proc.add(child)
+  if procedure.kind == nnkFuncDef:
+    proc_edit = newNimNode(nnkProcDef)
+    for child in procedure: proc_edit.add(child)
 
   # remove pragma
   #[var new_pragma = newNimNode(nnkPragma)
-  for p in remote_proc.pragma:
+  for p in proc_edit.pragma:
     if p.kind != nnkCall or p[0].strVal != remote_pragma:
       new_pragma.add(p)
-  remote_proc.pragma = new_pragma]#
-  remote_proc.pragma = nnkPragma.newTree(ident("async"))
+  proc_edit.pragma = new_pragma]#
+  proc_edit.pragma = nnkPragma.newTree(ident("async"))
 
-  let return_type = remote_proc.params[0]
-  remote_proc.params[0] =
+  var return_type = proc_edit.params[0]
+  if return_type.kind == nnkBracketExpr and return_type[0].strVal == "Future":
+    return_type = return_type[1]
+
+  proc_edit.params[0] =
     if return_type.kind == nnkIdent:
       nnkBracketExpr.newTree(ident("Future"), return_type)
     else:
@@ -82,26 +88,26 @@ macro ajax*(app: untyped, path: string, body: untyped): untyped =
 
   # collect all param names into tuple for serializing for rpc later
   var param_tuple = newNimNode(nnkTupleConstr)
-  for p in remote_proc.params.toSeq[1 .. ^1]:
+  for p in proc_edit.params.toSeq[1 .. ^1]:
     for p_ident in p.toSeq[0 ..< ^2]:
       param_tuple.add(p_ident)
 
   # desirialize(await makeRequest({{path}}, serialize({{param tuple}}), {{return type}})
   let proc_call =
-    deserializeCall(
+    ajaxDeserializeCall(
       newCall(ident("await"),
         newCall(ident("makeRequest"),
-          path, serializeCall(param_tuple)
+          path, ajaxSerializeCall(param_tuple)
         )
       ),
       return_type
     )
 
-  remote_proc.body = newStmtList(
+  proc_edit.body = newStmtList(
     if return_type.kind == nnkIdent:
       nnkReturnStmt.newTree(proc_call)
     else:
       proc_call
   )
 
-  remote_proc
+  proc_edit
