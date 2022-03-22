@@ -9,47 +9,36 @@ client:
   import strutils
 
 
+
 server:
-  
-  var app = newServerApp(client_path = "static/client.js")
 
-  func bla: string {. ajax(app, "/blajax"), get(app, "/bla/*") .} =
-    "bla"
+  var app = newServerApp(client_path = "client.js")
 
-  proc addit(a,b: int): Future[int] {. async, ajax(app, "/add") .} =
-    return a + b
-
-  proc index: Response {. route(app, "/", HttpGet) .} =
+  proc addIndex: Response {. get(app, "/add") .} =
     respOk(
+      link(rel="stylesheet", `type`="text/css", href="/static/style.css"),
       form(
+        onsubmit="event.preventDefault(); calc(this)",
         input(type="text", name="a"),
+        "+",
         input(type="text", name="b"),
         button("calc"),
         p(id="result")
       )
     )
 
-  proc index(uid: int64): Future[string] {. async, route(app, "/user/{uid}", HttpGet), route(app, "/{uid}", HttpGet) .} =
-    return h1("hi user" & $uid)
+  proc add(a,b: int): int {. ajax(app, "/ajax/add") .} =
+    return a + b
 
-  app.run()
+  run app
 
 
 client:
-  
-  window.addEventListener("load", proc(_: Event) =
 
-    let form = document.forms[0]
-
-    proc calc() {.async.} =
-      echo await addit(
-        ($form.elements[0].value).parse_int,
-        ($form.elements[1].value).parse_int
-      )
-
-    form.addEventListener("submit", proc(ev: Event) =
-      ev.prevent_default
-      discard calc()
+  proc calc(this: FormElement) {.async, exportc.} =
+    let res = await add(
+      ($this.elements[0].value).parse_int,
+      ($this.elements[1].value).parse_int
     )
+    document.getElementById("result").innerHTML = res.`$`.cstring
 
-  )

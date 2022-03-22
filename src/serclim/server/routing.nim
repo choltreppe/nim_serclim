@@ -67,11 +67,11 @@ macro route*(app: untyped, route: string, meth: untyped, procedure: untyped): un
 
   var proc_call = newCall(procedure.name)
   
-  let typed_params =
+  let parsed_params =
     if procedure.params.len <= 1: newStmtList()  # in case of no parameters no typecasting is needed
     else:
 
-      var param_type_cast = newNimNode(nnkTupleConstr)  # tuple of params casted to correct type
+      var param_parsing = newNimNode(nnkTupleConstr)  # tuple of params casted to correct type
       var param_assign = newNimNode(nnkVarTuple)        # assigning those
       
       # collecting everything for type casting and proc call
@@ -80,7 +80,7 @@ macro route*(app: untyped, route: string, meth: untyped, procedure: untyped): un
         for pname in p[0 ..< ^2]:
 
           param_assign.add(pname)
-          param_type_cast.add(
+          param_parsing.add(
             if ptype.strVal == "string":
               pname.unparsedParam
             elif ptype.strVal.startsWith("int"):
@@ -96,11 +96,11 @@ macro route*(app: untyped, route: string, meth: untyped, procedure: untyped): un
 
           proc_call.add(pname)
 
-      #[  let typed_params = nnkLetSection.newTree(
+      #[  let parsed_params = nnkLetSection.newTree(
         param_assign.add(
           newEmptyNode(),
           quote do:
-            try: `param_type_cast`
+            try: `param_parsing`
             except: return none(string)
         )
       ) ]#
@@ -109,7 +109,7 @@ macro route*(app: untyped, route: string, meth: untyped, procedure: untyped): un
         param_assign.add(
           newEmptyNode(),
           nnkTryStmt.newTree(
-            newStmtList(param_type_cast),
+            newStmtList(param_parsing),
             nnkExceptBranch.newTree(newStmtList(
               nnkReturnStmt.newTree(
                 newCall(ident("none"), ident("Response"))
@@ -138,7 +138,7 @@ macro route*(app: untyped, route: string, meth: untyped, procedure: untyped): un
     `app`.routes.add(proc(meth: HttpMethod, path: seq[string], body: string): Future[Option[string]] =
       if meth == `meth`:
         if `routing_pattern` ?= path:
-          `typed_params`
+          `parsed_params`
           return some(`proc_call`)
       return none(string)
     ) ]#
@@ -146,7 +146,7 @@ macro route*(app: untyped, route: string, meth: untyped, procedure: untyped): un
     newStmtList(
       newIfStmt((infix(ident("meth"), "==", meth), newStmtList(
         newIfStmt((infix(routing_pattern, "?=", ident("path")), newStmtList(
-          typed_params,
+          parsed_params,
           nnkReturnStmt.newTree(newCall(ident("some"), proc_call))
         )))
       ))),
@@ -177,7 +177,6 @@ macro post*(app: untyped, route: string, procedure: untyped): untyped =
 
 
 macro ajax*(app: untyped, path: string, procedure: untyped): untyped =
-  app.expectKind(nnkIdent)
   procedure.expectKind({nnkProcDef, nnkFuncDef})
 
   # for now always POST. probably later choosable
@@ -196,17 +195,17 @@ macro ajax*(app: untyped, path: string, procedure: untyped): untyped =
 
   var proc_call = newCall(procedure.name)
 
-  let typed_params =
+  let parsed_params =
     if procedure.params.len <= 1: newStmtList()  # in case of no parameters no typecasting is needed
     else:
 
-      var param_type_cast = newNimNode(nnkTupleConstr)
+      var param_parsing = newNimNode(nnkTupleConstr)
       var param_assign = newNimNode(nnkVarTuple)
 
       var j: int
       for p in procedure.params.toSeq[1 .. ^1]:
         for _ in 0 ..< p.len-2:
-          param_type_cast.add(p[^2])
+          param_parsing.add(p[^2])
           let param = ident("param" & $j)
           param_assign.add(param)
           proc_call.add(param)
@@ -221,7 +220,7 @@ macro ajax*(app: untyped, path: string, procedure: untyped): untyped =
         param_assign.add(
           newEmptyNode(),
           nnkTryStmt.newTree(
-            newStmtList(ajaxDeserializeCall(ident("body"), param_type_cast)),
+            newStmtList(ajaxDeserializeCall(ident("body"), param_parsing)),
             nnkExceptBranch.newTree(newStmtList(
               nnkReturnStmt.newTree(
                 newCall(ident("none"), ident("Response"))
@@ -255,7 +254,7 @@ macro ajax*(app: untyped, path: string, procedure: untyped): untyped =
         infix(ident("meth"), "==", meth), "and",
         infix(ident("path"), "==", path_pattern)),
       newStmtList(
-        typed_params,
+        parsed_params,
         nnkReturnStmt.newTree(
           newCall(ident("some"),
             newCall(ident("respText"), ident("Http200"), ajaxSerializeCall(proc_call))
@@ -268,3 +267,19 @@ macro ajax*(app: untyped, path: string, procedure: untyped): untyped =
 
   # return original proc and the call to add route to app
   newStmtList(procedure, add_handler)
+
+
+#[var ajax_anonymous_index {.compiletime.} = 0
+
+macro ajax*(app: untyped, procedure: untyped): untyped =
+  procedure.expectKind({nnkProcDef, nnkFuncDef})
+  let ajax_pragma = newCall(ident("ajax"), app, newStrLitNode("ajax_call_" & $ajax_anonymous_index))
+  ajax_anonymous_index += 1
+  var edit_procedure = procedure
+  edit_procedure.pragma = 
+    if edit_procedure.pragma.kind == nnkEmpty:
+      nnkPragma.newTree(ajax_pragma)
+    else:
+      edit_procedure.pragma.add(ajax_pragma)
+  edit_procedure
+]#

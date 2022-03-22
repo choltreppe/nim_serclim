@@ -1,0 +1,12 @@
+form{
+  display: flex;
+  align-items: center;
+}
+
+  form > *{
+    margin: 5px;
+  }
+
+  input[type="text"]{
+    width: 50px;
+  }

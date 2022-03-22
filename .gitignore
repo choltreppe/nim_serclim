@@ -1,2 +1,3 @@
-*/_build
+testapp/app
+testapp/client.js
 build.sh

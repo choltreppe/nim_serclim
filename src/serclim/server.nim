@@ -18,32 +18,41 @@ macro server*(body: untyped): untyped = body
 
 
 type ServerApp* = object
+  static_path: string
   client_path: string
   port: int
   handlers*: seq[proc(meth: HttpMethod, path: seq[string], body: string): Future[Option[Response]] {.async, closure.}]
 
 
-func newServerApp*(client_path: string, port = 8080): ServerApp =
-  ServerApp(client_path: client_path, port: port)
+func newServerApp*(client_path: string, static_path = "static", port = 8080): ServerApp =
+  ServerApp(static_path: static_path, client_path: client_path, port: port)
 
 
 proc run*(app: ServerApp) =
   proc loop {.async.} =
     var server = newAsyncHttpServer()
     proc cb(req: Request) {.async, gcsafe.} =
+
+      let path_rel = req.url.path[1 .. ^1]
       
-      echo req.url.path[1 .. ^1] & "  " & app.client_path
-      if req.url.path[1 .. ^1] == app.client_path:
-        await req.respond(Http200, readFile(app.client_path), newHttpHeaders())
+      if path_rel == app.client_path:
+        await req.respond(Http200, readFile(app.client_path))
         return
 
-      let headers = {"Content-type": "text/html; charset=utf-8"}
-      let path = req.url.path[1 .. ^1].split('/')
+      if path_rel.startsWith(app.static_path):
+        try:
+          let content = readFile(path_rel)
+          await req.respond(Http200, content)
+        except:
+          await req.respond(Http404, "Page not found")
+        return
+
+      let path = path_rel.split('/')
 
       for i in 0 ..< app.handlers.len:
         if Some(@res) ?= await app.handlers[i](req.reqMethod, path, req.body):
           await req.respond(
-            Http200,
+            res.code,
             case res.kind:
               of respOther: res.text
               of respHtml:
@@ -52,11 +61,13 @@ proc run*(app: ServerApp) =
                   body(script(src = ("/" & app.client_path)), res.html.body)
                 )
             ,
-            headers.newHttpHeaders()
+            if res.kind == respHtml:
+              newHttpHeaders({"Content-type": "text/html; charset=utf-8"})
+            else: newHttpHeaders()
           )
           return
 
-      await req.respond(Http404, "Page not found", headers.newHttpHeaders())
+      await req.respond(Http404, "Page not found")
 
     server.listen(Port(app.port))
     while true:
