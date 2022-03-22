@@ -9,12 +9,14 @@ client:
   import strutils
 
 
-
 server:
 
   var app = newServerApp(client_path = "client.js")
 
-  proc addIndex: Response {. get(app, "/add") .} =
+  func add(a,b: int): int {. ajax(app, "/ajax/add") .} =
+    a + b
+
+  proc addGui: Response {. get(app, "/add") .} =
     respOk(
       link(rel="stylesheet", `type`="text/css", href="/static/style.css"),
       form(
@@ -27,8 +29,8 @@ server:
       )
     )
 
-  proc add(a,b: int): int {. ajax(app, "/ajax/add") .} =
-    return a + b
+  func addUrl(a,b: int): string {. get(app, "/add/{a}/{b}") .} =
+    $add(a, b)
 
   run app
 
