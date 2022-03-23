@@ -32,6 +32,17 @@ server:
   func addUrl(a,b: int): string {. get(app, "/add/{a}/{b}") .} =
     $add(a, b)
 
+
+  func bodyParsingTest1(x: Body[int]): string {.get(app, "/testbody").} =
+    if x < 0: "negative"
+    else: "positive"
+
+  type TestType = enum testA, testB
+  func bodyParsingTest2(x: Json[TestType]): string {.get(app, "/testjson").} =
+    case x:
+      of testA: "a"
+      of testB: "b"
+
   run app
 
 

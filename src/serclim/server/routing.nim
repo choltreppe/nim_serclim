@@ -3,9 +3,16 @@ import serclim/private/common
 import std/macros
 import std/sequtils
 import std/strutils
+import std/marshal
+export marshal
 
 import fusion/matching
 {.experimental: "caseStmtMacros".}
+
+
+type
+  Body*[T] = T
+  Json*[T] = T
 
 
 # generate call to add handler lambda to app.handlers
@@ -75,25 +82,30 @@ macro route*(app: untyped, route: string, meth: untyped, procedure: untyped): un
       var param_assign = newNimNode(nnkVarTuple)        # assigning those
       
       # collecting everything for type casting and proc call
+      proc parseBasicTypes(ptype, pname: NimNode): NimNode =
+        if ptype.strVal == "string":
+          pname
+        elif ptype.strVal.startsWith("int"):
+          newCall(ptype, newCall(ident("parseInt"), pname))
+        elif ptype.strVal.startsWith("uint") :
+          newCall(ptype, newCall(ident("parseUint"), pname))
+        elif ptype.strVal.startsWith("float") :
+          newCall(ptype, newCall(ident("parseFloat"), pname))
+        else:
+          error("routing parameters don't support " & ptype.strVal)
+          return
       for p in procedure.params.toSeq[1 .. ^1]:
         let ptype = p[^2]
         for pname in p[0 ..< ^2]:
-
           param_assign.add(pname)
           param_parsing.add(
-            if ptype.strVal == "string":
-              pname.unparsedParam
-            elif ptype.strVal.startsWith("int"):
-              newCall(ptype, newCall(ident("parseInt"), pname.unparsedParam))
-            elif ptype.strVal.startsWith("uint") :
-              newCall(ptype, newCall(ident("parseUint"), pname.unparsedParam))
-            elif ptype.strVal.startsWith("float") :
-              newCall(ptype, newCall(ident("parseFloat"), pname.unparsedParam))
+            if ptype.kind == nnkBracketExpr and ptype[0].strVal == "Json":
+              newCall(nnkBracketExpr.newTree(ident("to"), ptype[1]), ident("body"))
+            elif ptype.kind == nnkBracketExpr and ptype[0].strVal == "Body":
+              parseBasicTypes(ptype[1], ident("body"))
             else:
-              error("routing parameters don't support " & ptype.strVal)
-              return
+              parseBasicTypes(ptype, pname.unparsedParam)
           )
-
           proc_call.add(pname)
 
       #[  let parsed_params = nnkLetSection.newTree(
@@ -108,14 +120,14 @@ macro route*(app: untyped, route: string, meth: untyped, procedure: untyped): un
       nnkLetSection.newTree(
         param_assign.add(
           newEmptyNode(),
-          nnkTryStmt.newTree(
-            newStmtList(param_parsing),
+          #[nnkTryStmt.newTree(
+            newStmtList(]#param_parsing#[),
             nnkExceptBranch.newTree(newStmtList(
               nnkReturnStmt.newTree(
                 newCall(ident("none"), ident("Response"))
               )
             ))
-          )
+          )]#
         )
       )
 
