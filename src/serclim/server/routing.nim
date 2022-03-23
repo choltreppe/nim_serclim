@@ -120,14 +120,14 @@ macro route*(app: untyped, route: string, meth: untyped, procedure: untyped): un
       nnkLetSection.newTree(
         param_assign.add(
           newEmptyNode(),
-          #[nnkTryStmt.newTree(
-            newStmtList(]#param_parsing#[),
+          nnkTryStmt.newTree(
+            newStmtList(param_parsing),
             nnkExceptBranch.newTree(newStmtList(
               nnkReturnStmt.newTree(
                 newCall(ident("none"), ident("Response"))
               )
             ))
-          )]#
+          )
         )
       )
 
