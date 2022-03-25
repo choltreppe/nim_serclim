@@ -32,7 +32,7 @@ func add(a,b: int): int =
 
 server:
 
-  var app = newServerApp(client_path = "client.js")
+  var app = newServerApp(clientPath = "client.js")
 
   proc addIndex: Response {. get(app, "/add") .} =
     respOk(
@@ -52,8 +52,8 @@ server:
 
 proc calc(this: FormElement) {. client, exportc .} =
   let res = add(
-    ($this.elements[0].value).parse_int,
-    ($this.elements[1].value).parse_int
+    ($this.elements[0].value).parseInt,
+    ($this.elements[1].value).parseInt
   )
   document.getElementById("result").innerHTML = res.`$`.cstring
 ```
@@ -102,7 +102,7 @@ client:
 
 server:
 
-  var app = newServerApp(client_path = "client.js")
+  var app = newServerApp(clientPath = "client.js")
 
   func add(a,b: int): int {. ajax(app, "/ajax/add") .} =
     a + b
@@ -130,8 +130,8 @@ client:
 
   proc calc(this: FormElement) {.async, exportc.} =
     let res = await add(
-      ($this.elements[0].value).parse_int,
-      ($this.elements[1].value).parse_int
+      ($this.elements[0].value).parseInt,
+      ($this.elements[1].value).parseInt
     )
     document.getElementById("result").innerHTML = res.`$`.cstring
 ```

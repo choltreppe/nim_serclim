@@ -5,7 +5,7 @@ import fusion/matching
 export matching, flatty
 
 
-when querySetting(command) == "js":
+when defined(js):
   import serclim/client
   export client
 else:

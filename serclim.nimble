@@ -1,7 +1,7 @@
 version       = "0.0.1"
 author        = "Joel Lienhard"
 description   = "A client-server webframework"
-license       = "Apache-2.0"
+license       = "MIT"
 srcDir        = "src"
 
 
