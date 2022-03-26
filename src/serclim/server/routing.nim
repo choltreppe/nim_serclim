@@ -45,10 +45,13 @@ macro route*(app: untyped, route: string, meth: untyped, procedure: untyped): un
   let routeElems = editRoute.split('/')
 
   var routingPattern = newNimNode(nnkBracket)
+  var routeParams: seq[string]
   for relem in routeElems:
     routingPattern.add(
       if editRoute.len >= 2 and relem[0] == '{' and relem[^1] == '}':
-        nnkPrefix.newTree(ident("@"), ident(relem[1 ..< ^1]).unparsedParam)
+        let param = relem[1 ..< ^1]
+        routeParams.add(param)
+        nnkPrefix.newTree(ident("@"), ident(param).unparsedParam)
       else:
         newStrLitNode(relem)
     )
@@ -67,35 +70,48 @@ macro route*(app: untyped, route: string, meth: untyped, procedure: untyped): un
       var paramAssign = newNimNode(nnkVarTuple)      # assigning those
       
       proc parseBasicTypes(ptype, pname: NimNode): NimNode =
-        echo pname.kind
-        if ptype.strVal == "string": pname
-        elif ptype.strVal.startsWith("int"):
-          newCall(ptype, newCall(ident("parseInt"), pname))
-        elif ptype.strVal.startsWith("uint"):
-          newCall(ptype, newCall(ident("parseUint"), pname))
-        elif ptype.strVal.startsWith("float"):
-          newCall(ptype, newCall(ident("parseFloat"), pname))
+        if ptype.kind == nnkBracketExpr and ptype[0].strVal == "Json":
+          genAst(handlerBody, t = ptype[1]):
+            to[t](handlerBody)
+        elif ptype.kind == nnkIdent:
+          if ptype.strVal == "string": pname
+          else:
+            newCall(ptype, newCall(ident(
+              if   ptype.strVal.startsWith("int")   : "parseInt"
+              elif ptype.strVal.startsWith("uint")  : "parseUint"
+              elif ptype.strVal.startsWith("float") : "parseFloat"
+              else:
+                error("routing parameters don't support " & ptype.strVal)
+                return
+              ),
+              pname
+            ))
         else:
-          error("routing parameters don't support " & ptype.strVal)
+          error("routing parameters don't support this type")
           return
 
       # collecting everything for type casting and proc call
       for p in procedure.params[1 .. ^1]:
-        let ptype = p[^2]
+        let ptype =
+          if p[^2].kind != nnkEmpty: p[^2]
+          else: typeOfLit(p[^1])
         for pname in p[0 ..< ^2]:
-          paramAssign.add(pname)
-          paramParsing.add(
-            if ptype.kind == nnkBracketExpr and ptype[0].strVal == "Json":
+          if routeParams.contains(pname.strVal):
+            paramParsing.add(parseBasicTypes(ptype, pname.unparsedParam))
+          #[elif ptype.kind == nnkBracketExpr and ptype[0].strVal == "Json":
+            paramParsing.add(
               genAst(handlerBody, t = ptype[1]):
                 to[t](handlerBody)
+            )]#
+          elif ptype.kind == nnkBracketExpr and ptype[0].strVal == "Body":
+            paramParsing.add(parseBasicTypes(ptype[1], handlerBody))
 
-            elif ptype.kind == nnkBracketExpr and ptype[0].strVal == "Body":
-              parseBasicTypes(ptype[1], handlerBody)
+          else: continue
+          paramAssign.add(pname)
+          procCall.add(nnkExprEqExpr.newTree(pname, pname))  # using explicit names to account for defaults
 
-            else:
-              parseBasicTypes(ptype, pname.unparsedParam)
-          )
-          procCall.add(pname)
+      echo procedure.name.strVal
+      echo paramParsing.treeRepr
 
       # assign casted types. if not possible route failed
       nnkLetSection.newTree(

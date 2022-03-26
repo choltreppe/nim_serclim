@@ -33,15 +33,19 @@ server:
     $add(a, b)
 
 
+  func testDefault(a: string, b = "b", c = "c"): string {.get(app, "/dtestab/{a}/{b}"), get(app, "/dtestac/{a}/{c}").} =
+    a & b & c
+ 
   func bodyParsingTest1(x: Body[int]): string {.get(app, "/testbody").} =
     if x < 0: "negative"
     else: "positive"
 
   type TestType = enum testA, testB
-  func bodyParsingTest2(x: Json[TestType]): string {.get(app, "/testjson").} =
+  func bodyParsingTest2(x: Body[Json[TestType]]): string {.get(app, "/testjson").} =
     case x:
       of testA: "a"
       of testB: "b"
+
 
   run app
 
