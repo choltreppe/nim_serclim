@@ -1,12 +1,22 @@
-import std/httpcore
+import std/[httpcore, options, sequtils, strutils]
 
 type
   ResponseKind* = enum respHtml, respOther
+  RespHeaders* = seq[(string, string)]
   Response* = object
     case kind*: ResponseKind
       of respHtml: html*: tuple[head, body : string]
       of respOther: text*: string  # won't include client code
     code*: HttpCode
+    headers*: RespHeaders
+
+
+func add*(headers, addHeaders: RespHeaders): RespHeaders =
+  result = headers
+  for header in addHeaders:
+    result.keepItIf(cmpIgnoreCase(header[0], it[0]) != 0)
+  result = result & addHeaders
+
 
 func resp*(code: HttpCode, head,body: string): Response =
   Response(
@@ -41,4 +51,11 @@ func respText*(code: HttpCode, text: string): Response =
     kind: respOther,
     text: text,
     code: code
+  )
+
+func respTextOk*(text: string): Response =
+  Response(
+    kind: respOther,
+    text: text,
+    code: Http200
   )

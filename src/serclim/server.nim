@@ -1,4 +1,5 @@
 import std/options
+import std/tables
 import std/marshal
 import std/httpcore
 import std/asynchttpserver
@@ -17,20 +18,28 @@ macro client*(_: untyped): untyped = discard
 macro server*(body: untyped): untyped = body
 
 
-type ServerApp* = object
-  staticPath: string
-  clientPath: string
-  port: int
-  handlers*: seq[proc(meth: HttpMethod, path: seq[string], body: string): Future[Option[Response]] {.async, closure.}]
+type
+  ServerApp* = object
+    staticPath: string
+    clientPath: string
+    port: int
+    handlers*: seq[proc(meth: HttpMethod, path: seq[string], body: string, cookieStr: string): Future[Option[Response]] {.async, closure.}]
+    headers: tuple[text,html: RespHeaders]
+
+let defaultHeaders: tuple[text,html: RespHeaders] = (
+  @[("Content-type", "text/plain; charset=utf-8")],
+  @[("Content-type", "text/html; charset=utf-8")]
+)
 
 
-func newServerApp*(clientPath: string, staticPath = "static", port = 8080): ServerApp =
-  ServerApp(staticPath: staticPath, clientPath: clientPath, port: port)
+func newServerApp*(clientPath: string, staticPath = "static", port = 8080, headers = defaultHeaders): ServerApp =
+  ServerApp(staticPath: staticPath, clientPath: clientPath, port: port, headers: headers)
 
 
 proc run*(app: ServerApp) =
   proc loop {.async.} =
     var server = newAsyncHttpServer()
+    
     proc cb(req: Request) {.async, gcsafe.} =
 
       try:
@@ -48,23 +57,37 @@ proc run*(app: ServerApp) =
             await req.respond(Http404, "Page not found")
           return
 
+
         let path = path_rel.split('/')
 
+        let headers = req.headers.table
+        let cookieStr =
+          if headers.contains("Cookies"):
+            headers["Cookies"].join(";")
+          elif headers.contains("cookies"):
+            headers["cookies"].join(";")
+          else: ""
+
         for i in 0 ..< app.handlers.len:
-          if Some(@res) ?= await app.handlers[i](req.reqMethod, path, req.body):
+          if Some(@resp) ?= await app.handlers[i](req.reqMethod, path, req.body, cookieStr):
             await req.respond(
-              res.code,
-              case res.kind:
-                of respOther: res.text
+              resp.code,
+              case resp.kind:
+                of respOther: resp.text
                 of respHtml:
                   html(
-                    head(res.html.head),
-                    body(script(src = ("/" & app.clientPath)), res.html.body)
+                    head(resp.html.head),
+                    body(script(src = ("/" & app.clientPath)), resp.html.body)
                   )
               ,
-              if res.kind == respHtml:
-                newHttpHeaders({"Content-type": "text/html; charset=utf-8"})
-              else: newHttpHeaders()
+              newHttpHeaders(
+                (
+                  case resp.kind:
+                    of respOther: app.headers.text
+                    of respHtml: app.headers.html
+                )
+                .add(resp.headers)
+              )
             )
             return
 
@@ -74,6 +97,7 @@ proc run*(app: ServerApp) =
         await req.respond(Http404, "Server Error")
         echo "Error: " & e.msg
 
+
     server.listen(Port(app.port))
     while true:
       if server.shouldAcceptRequest():
@@ -82,6 +106,7 @@ proc run*(app: ServerApp) =
         # too many concurrent connections, `maxFDs` exceeded
         # wait 500ms for FDs to be closed
         await sleepAsync(500)
+
 
   waitFor loop()
 

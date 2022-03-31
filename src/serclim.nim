@@ -1,5 +1,3 @@
-import std/compilesettings
-
 import flatty
 import fusion/matching
 export matching, flatty
