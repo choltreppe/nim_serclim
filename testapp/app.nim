@@ -2,6 +2,7 @@ import serclim
 
 server:
   import htmlgen
+  import serclim/server/cookies
 
 client:
   import std/asyncjs
@@ -45,6 +46,12 @@ server:
     case x:
       of testA: "a"
       of testB: "b"
+
+
+  proc testCookies(cookies: var CookieJar): string {.get(app, "/cookies").} =
+    cookies.del("cookieA")
+    cookies["cookieB"] = "foo"
+    "ok"
 
 
   run app

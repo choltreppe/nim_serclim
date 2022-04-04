@@ -18,44 +18,50 @@ func add*(headers, addHeaders: RespHeaders): RespHeaders =
   result = result & addHeaders
 
 
-func resp*(code: HttpCode, head,body: string): Response =
+func resp*(code: HttpCode, head,body: string, headers: RespHeaders = @[]): Response =
   Response(
     kind: respHtml,
     html: (head, body),
-    code: code
+    code: code,
+    headers: headers
   )
 
-func resp*(code: HttpCode, body: string): Response =
+func resp*(code: HttpCode, body: string, headers: RespHeaders = @[]): Response =
   Response(
     kind: respHtml,
     html: ("", body),
-    code: code
+    code: code,
+    headers: headers
   )
 
-func respOk*(head,body: string): Response =
+func respOk*(head,body: string, headers: RespHeaders = @[]): Response =
   Response(
     kind: respHtml,
     html: (head, body),
-    code: Http200
+    code: Http200,
+    headers: headers
   )
 
-func respOk*(body: string): Response =
+func respOk*(body: string, headers: RespHeaders = @[]): Response =
   Response(
     kind: respHtml,
     html: ("", body),
-    code: Http200
+    code: Http200,
+    headers: headers
   )
 
-func respText*(code: HttpCode, text: string): Response =
+func respText*(code: HttpCode, text: string, headers: RespHeaders = @[]): Response =
   Response(
     kind: respOther,
     text: text,
-    code: code
+    code: code,
+    headers: headers
   )
 
-func respTextOk*(text: string): Response =
+func respTextOk*(text: string, headers: RespHeaders = @[]): Response =
   Response(
     kind: respOther,
     text: text,
-    code: Http200
+    code: Http200,
+    headers: headers
   )

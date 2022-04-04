@@ -41,7 +41,7 @@ proc run*(app: ServerApp) =
     var server = newAsyncHttpServer()
     
     proc cb(req: Request) {.async, gcsafe.} =
-
+      
       try:
         let path_rel = req.url.path[1 .. ^1]
         
