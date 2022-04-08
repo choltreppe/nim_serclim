@@ -7,7 +7,6 @@ import std/asyncjs
 import ajax
 
 
-
 proc makeRequest*(url: string, data: string): Future[string] =
   return newPromise[string](proc(resolve: proc(response: string)) =
     var xhr = new_xmlhttp_request()
@@ -24,8 +23,8 @@ proc makeRequest*(url: string, data: string): Future[string] =
           echo "There was a problem with the request."
 
     xhr.onreadystatechange = onRecv
-    xhr.open("POST", url);
-    xhr.send(data.cstring);
+    xhr.open("POST", url)
+    xhr.send(data.cstring)
   )
 
 

@@ -1,4 +1,4 @@
-version       = "0.0.1"
+version       = "0.1.0"
 author        = "Joel Lienhard"
 description   = "A client-server webframework"
 license       = "MIT"
@@ -6,7 +6,7 @@ srcDir        = "src"
 
 
 requires "nim >= 1.6.4"
-requires "flatty >= 0.2.4"
+requires "jsony >= 1.1.3"
 
 
 task test, "run tests":

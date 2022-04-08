@@ -3,6 +3,7 @@ import serclim
 server:
   import htmlgen
   import serclim/server/cookies
+  import strformat
 
 client:
   import std/asyncjs
@@ -14,7 +15,7 @@ server:
 
   var app = newServerApp(clientPath = "client.js")
 
-  func add(a,b: int): int {. ajax(app, "/ajax/add") .} =
+  proc add(a,b: int): int {. ajax(app, "/ajax/add") .} =
     a + b
 
   proc addGui: Response {. get(app, "/add") .} =
@@ -30,7 +31,7 @@ server:
       )
     )
 
-  func addUrl(a,b: int): string {. get(app, "/add/{a}/{b}") .} =
+  proc addUrl(a,b: int): string {. get(app, "/add/{a}/{b}") .} =
     $add(a, b)
 
 

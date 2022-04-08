@@ -3,10 +3,10 @@ import std/strutils
 
 
 proc ajaxSerializeCall*(data: NimNode): NimNode =
-  newCall(ident("toFlatty"), data)
+  newCall(ident("toJson"), data)
 
 proc ajaxDeserializeCall*(data: NimNode, typedecl: NimNode): NimNode =
-  newCall(ident("fromFlatty"), data, typedecl)
+  newCall(ident("fromJson"), data, typedecl)
 
 
 proc typeOfLit*(literal: NimNode): NimNode =

@@ -1,6 +1,7 @@
-import flatty
+import jsony
 import fusion/matching
-export matching, flatty
+export matching
+export jsony.toJson, jsony.fromJson
 
 
 when defined(js):
