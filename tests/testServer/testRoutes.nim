@@ -45,13 +45,21 @@ test "routing: get/post pragma":
 proc testParse1(a,b: uint): string {.get(app, "/parse1/{a}/{b}").} =
   $(a + b)
 
-proc testParse2(a,b: int, c: string): string {.get(app, "/parse2/{a}/{b}/str/{c}").} =
+proc testParse2(a,b: int64, c: string): string {.get(app, "/parse2/{a}/{b}/str/{c}").} =
   "a*b=" & $(a*b) & ", c=" & c
+
+proc testParse3(x: 1 .. 6): string {.get(app, "/parse3/{x}").} =
+  $x
 
 test "routing: parsing parameters":
   check testRoutes(HttpGet, @["parse1", "2", "3"], expectText = "5")
   check testRouteNone(3, HttpGet, @["parse1", "a", "3"])
+
   check testRoutes(HttpGet, @["parse2", "2", "3", "str", "test"], expectText = "a*b=6, c=test")
+
+  check testRoutes(HttpGet, @["parse3", "2"], expectText = "2")
+  check testRouteNone(5, HttpGet, @["parse3", "0"])
+  check testRouteNone(5, HttpGet, @["parse3", "7"])
 
 
 
@@ -122,8 +130,44 @@ proc testJson2(e: Json[TestEnum]): string {.get(app, "/json2/{e}").} =
     of teB: "b"
 
 test "routing: parsing json":
-  check testRoutes(HttpGet, @["json"]       , $$TestObj(kind: teA, a: 2, c: "x"), expectText = "a+1=3, c=x")
-  check testRoutes(HttpGet, @["json2", $$teA]                                   , expectText = "a"         )
+  check testRoutes(HttpGet, @["json"], TestObj(kind: teA, a: 2, c: "x").toJson, expectText = "a+1=3, c=x")
+  check testRoutes(HttpGet, @["json2", teA.toJson], expectText = "a")
+
+
+
+type Address = object
+  firstname, lastname, street, nr, city: string
+  postcode: uint
+
+func parseParam[T: Address](s: string, _: typedesc[T]): T =
+  let lines = s.split("\n")
+  let fullname = lines[0].split(" ")
+  let streetnr = lines[1].split(" ")
+  let citypostal = lines[2].split(" ")
+  Address(
+    firstname: fullname[0 ..< ^1].join(" "),
+    lastname:  fullname[^1],
+    street:    streetnr[0 ..< ^1].join(" "),
+    nr:        streetnr[^1],
+    city:      citypostal[1 .. ^1].join(" "),
+    postcode:  citypostal[0].parseUInt.uint
+  )
+
+func testCustomParse(address: Body[Address]): string {.get(app, "/customParse").} =
+  $address
+
+test "routing: custom parsing":
+  check testRoutes(HttpGet, @["customParse"],
+    "Joel Lienhard\nAt the Something 1a\n12345 Somecity",
+    expectText = $Address(
+      firstname: "Joel",
+      lastname: "Lienhard",
+      street: "At the Something",
+      nr: "1a",
+      city: "Somecity",
+      postcode: 12345
+    )
+  )
 
 
 

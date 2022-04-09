@@ -1,9 +1,7 @@
 import serclim/private/common
 
-import std/macros
-import std/sequtils
-import std/dom
-import std/asyncjs
+import std/[macros, genasts]
+import std/[sequtils, dom, asyncjs]
 import ajax
 
 
@@ -85,14 +83,9 @@ macro ajax*(app: untyped, path: string, procedure: untyped): untyped =
     for p_ident in p.toSeq[0 ..< ^2]:
       paramTuple.add(p_ident)
 
-  # desirialize(await makeRequest({{path}}, serialize({{param tuple}}), {{return type}})
-  let procCall =
-    ajaxDeserializeCall(
-      newCall(ident("await"),
-        newCall(ident("makeRequest"),
-          path, ajaxSerializeCall(paramTuple)
-        )
-      ),
+  let procCall = genAst(path, paramTuple, returnType):
+    fromJson(
+      await makeRequest(path, toJson(paramTuple)),
       returnType
     )
 

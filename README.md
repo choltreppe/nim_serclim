@@ -104,90 +104,85 @@ server:
 
 For `HttpGet` and `HttpPost` you can use `get(app, route)` and `post(app, route)` short forms
 ```nim
-server:
-  var app = newServerApp(clientPath = "client.js")
-
-  func repeateTwice(text: string): string {.get(app, "/twice/{text}"), post(app, "/twice/{text}").}
-
-  app.run
+func repeateTwice(text: string): string {.get(app, "/twice/{text}"), post(app, "/twice/{text}").} =
+  text & text
 ```
 
 You can also use default values for parameters, so you dont have to capture them in the route.
 ```nim
-server:
-  var app = newServerApp(clientPath = "client.js")
-
-  func chainABC(a: string, b = "b", c = "c"): string {.get("/chain/ab/{a}/{b}"), get("/chain/ac/{a}/{c}").} =
-    a & b & c
-
-  app.run
+func chainABC(a: string, b = "b", c = "c"): string {.get("/chain/ab/{a}/{b}"), get("/chain/ac/{a}/{c}").} =
+  a & b & c
 ```
 
 As you can see in the example, you can define as many routes for one proc/func as you like.
 
-For the proc params you can use `string`, `int`, `uint`, `float` and all specific size versions of them.<br>
+Out of the boy supported types are `string`, `int`, `int8`, `int16`, `int32`, `int64`, `uint`, `uint8`, `uint16`, `uint32`, `uint64`, `float`, `float32`, `float64`, `enum`, `range`<br>
 They will get parsed automatically. And if they cant be parsed, the route does not match and the server will try the other routes.
 ```nim
-server:
-  var app = newServerApp(clientPath = "client.js")
+func add(a,b: int16): string {.get(app, "/add/{a}/{b}").} =
+  a + b
+```
+```nim
+func add(month: 1 .. 12): string {.get(app, "/something_with_month/{month}").} =
+  # do something
+```
+But if you need some other type you can define a `parseParam` proc for it, to define a custom parser.
+```nim
+type Address = object
+  firstname, lastname, street, nr, city: string
+  postcode: uint
 
-  func add(a,b: int16): string {.get(app, "/add/{a}/{b}").} =
-    a + b
-
-  app.run
+func parseParam[T: Address](s: string, _: typedesc[T]): T =
+  let lines = s.split("\n")
+  let fullname = lines[0].split(" ")
+  let streetnr = lines[1].split(" ")
+  let citypostal = lines[2].split(" ")
+  Address(
+    firstname: fullname[0 ..< ^1].join(" "),
+    lastname:  fullname[^1],
+    street:    streetnr[0 ..< ^1].join(" "),
+    nr:        streetnr[^1],
+    city:      citypostal[1 .. ^1].join(" "),
+    postcode:  citypostal[0].parseUInt.uint
+  )
 ```
 If you want to use another type, you can use the `Json[T]` type, which is just a compiletime info for the routing pragma that the parameter is json-formated.<br>
 The type is defined as `type Json[T] = T` so its just a value of type `T`.<br>
 ```nim
-server:
-  var app = newServerApp(clientPath = "client.js")
+type
+  UserKind = enum ukNormal, ukAdmin
+  User = object
+    kind: Userkind
+    name: string
 
-  type
-    UserKind = enum ukNormal, ukAdmin
-    User = object
-      kind: Userkind
-      name: string
+var users: seg[User]
 
-  var users: seg[User]
-
-  proc addUser(user: Json[User]): string {.post(app, "/user/add/{user}").}
-    users.add(user)
-    ""  
-
-  app.run
+proc addUser(user: Json[User]): string {.post(app, "/user/add/{user}").}
+  users.add(user)
+  ""
 ```
 
 ## auto injected parameters
 
 ### Body
-If you want to use the body of the request, you can use the `Body[T]` type, which is just a compiletime ifo like the Json type.
+If you want to use the body of the request, you can use the `Body[T]` type, which is just a compiletime info like the Json type.
 Parameters with that type get the body content parsed into `T` foloowing the same rules as route parameters.
 ```nim
-server:
-  var app = newServerApp(clientPath = "client.js")
-
-  func succ(x: Body[int]): string {.get(app, "/succ").} =
-    x + 1
-
-  app.run
+func succ(x: Body[int]): string {.get(app, "/succ").} =
+  x + 1
 ```
 ```nim
-server:
-  var app = newServerApp(clientPath = "client.js")
+type
+  UserKind = enum ukNormal, ukAdmin
+  User = object
+    kind: Userkind
+    name: string
 
-  type
-    UserKind = enum ukNormal, ukAdmin
-    User = object
-      kind: Userkind
-      name: string
+var users: seg[User]
 
-  var users: seg[User]
-
-  proc addUser(user: Body[Json[User]]): string {.post(app, "/user/add").}
-    users.add(user)
-    ""  
-
-  app.run
+proc addUser(user: Body[Json[User]]): string {.post(app, "/user/add").}
+  users.add(user)
+  ""
 ```
 
 ### CookieJar
@@ -195,24 +190,19 @@ server:
 If you want to handle cookies you can use a `CookieJar` parameter.<br>
 Or `var CookieJar` if you want to edit them.<br>
 ```nim
-server:
-  import serclim/server/cookies
+import serclim/server/cookies
 
-  var app = newServerApp(clientPath = "client.js")
-
-  proc cookieStuff(cookies: var CookieJar): string {.get(app, "/cookies").} =
-    cookieJar.del("cookieA")
-    cookieJar["cookieB"] = "foo"
-    cookieJar.add("withAttr", "ba",
-      expires = dateTime(1999, mJun, 10, 13, 37, 42, 0, utc()),
-      path = "/bla",
-      domain = "example.org",
-      secure = true,
-      httpOnly = true
-    )
-    ""
-
-  app.run
+proc cookieStuff(cookies: var CookieJar): string {.get(app, "/cookies").} =
+  cookieJar.del("cookieA")
+  cookieJar["cookieB"] = "foo"
+  cookieJar.add("withAttr", "ba",
+    expires = dateTime(1999, mJun, 10, 13, 37, 42, 0, utc()),
+    path = "/bla",
+    domain = "example.org",
+    secure = true,
+    httpOnly = true
+  )
+  ""
 ```
 
 ### Response

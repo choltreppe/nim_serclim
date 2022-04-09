@@ -9,7 +9,7 @@ import std/htmlgen
 include server/routing
 import server/response
 
-export strutils, options, marshal, asyncdispatch, httpcore
+export strutils, options, asyncdispatch, httpcore
 export response
 
 
@@ -37,7 +37,7 @@ func newServerApp*(clientPath: string, staticPath = "static", port = 8080, heade
 
 
 proc run*(app: ServerApp) =
-  proc loop {.async.} =
+  proc serve {.async.} =
     var server = newAsyncHttpServer()
     
     proc cb(req: Request) {.async, gcsafe.} =
@@ -108,5 +108,5 @@ proc run*(app: ServerApp) =
         await sleepAsync(500)
 
 
-  waitFor loop()
+  waitFor serve()
 

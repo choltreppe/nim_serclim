@@ -1,11 +1,8 @@
 import serclim/private/common
 
-import std/macros
-import std/genasts
-import std/sequtils
-import std/strutils
-import std/marshal
-export marshal
+import jsony
+import std/[macros, genasts]
+import std/[sequtils, strutils]
 
 import fusion/matching
 {.experimental: "caseStmtMacros".}
@@ -14,6 +11,30 @@ import fusion/matching
 type
   Body*[T] = T
   Json*[T] = T
+  AnyInt   =  int |  int8 |  int16 |  int32 |  int64
+  AnyUInt  = uint | uint8 | uint16 | uint32 | uint64
+  AnyFloat = float | float32 | float64
+
+func parseParam*[T: string  ](s: string, _: typedesc[T]): T = s
+
+func parseParam*[T: AnyInt  ](s: string, _: typedesc[T]): T = s.parseInt.T
+
+func parseParam*[T: AnyUInt ](s: string, _: typedesc[T]): T = s.parseUInt.T
+
+func parseParam*[T: range   ](s: string, _: typedesc[T]): T = s.parseInt.T
+template parseParam*(s: string, r: HSlice): untyped = parseParam(s, range[r])
+
+func parseParam*[T: AnyFloat](s: string, _: typedesc[T]): T = s.parseFloat.T
+
+func parseParam*[T: enum    ](s: string, _: typedesc[T]): T = parseEnum[T](s)
+
+# patentialy marked with tranparent type marker
+macro parseParamMarked(s: string, t: untyped): untyped =
+  if t.kind == nnkBracketExpr and cmpIgnoreStyle(t[0].strVal, "Json") == 0:
+    genAst(s, t = t[1]): fromJson(s, t)
+  else:
+    genAst(s, t): parseParam(s, t)
+
 
 
 macro route*(app: untyped, route: string, meth: untyped, procedure: untyped): untyped =
@@ -23,12 +44,8 @@ macro route*(app: untyped, route: string, meth: untyped, procedure: untyped): un
   func paramIdentStr(pname: NimNode): NimNode = ident("str"   & pname.strVal)
 
   let
-    symMeth = genSym(nskParam, "meth")
-    symPath = genSym(nskParam, "path")
     symBody = genSym(nskParam, "body")
-    symCookieStr = genSym(nskParam, "cookieStr")
     symCookieJar = genSym(nskVar, "cookieJar")
-    symProcResp = genSym(nskVar, "procResp")
 
   # ---- gen routing pattern ----
 
@@ -73,27 +90,6 @@ macro route*(app: untyped, route: string, meth: untyped, procedure: untyped): un
 
       var paramParsing = newNimNode(nnkTupleConstr)  # tuple of params casted to correct type
       var paramAssign = newNimNode(nnkVarTuple)      # assigning those
-      
-      proc genParamParse(ptype, pname: NimNode): NimNode =
-        if ptype.kind == nnkBracketExpr and cmpIgnoreStyle(ptype[0].strVal, "Json") == 0:
-          genAst(pname, t = ptype[1]):
-            to[t](pname)
-        elif ptype.kind == nnkIdent:
-          if ptype.strVal == "string": pname
-          else:
-            newCall(ptype, newCall(ident(
-              if   ptype.strVal.startsWith("int")   : "parseInt"
-              elif ptype.strVal.startsWith("uint")  : "parseUint"
-              elif ptype.strVal.startsWith("float") : "parseFloat"
-              else:
-                error("routing parameters don't support " & ptype.strVal)
-                return
-              ),
-              pname
-            ))
-        else:
-          error("routing parameters don't support this type")
-          return
 
       # collecting everything for type casting and proc call
       for p in procedure.params[1 .. ^1]:
@@ -102,10 +98,16 @@ macro route*(app: untyped, route: string, meth: untyped, procedure: untyped): un
           else: typeOfLit(p[^1])
         for pname in p[0 ..< ^2]:
           if routeParams.contains(pname.strVal):
-            paramParsing.add(genParamParse(ptype, pname.paramIdentStr))
+            paramParsing.add(block:
+              genAst(pname = pname.paramIdentStr, ptype):
+                parseParamMarked(pname, ptype)
+            )
 
           elif ptype.kind == nnkBracketExpr and cmpIgnoreStyle(ptype[0].strVal, "Body") == 0:
-            paramParsing.add(genParamParse(ptype[1], symBody))
+            paramParsing.add(block:
+              genAst(symBody, ptype = ptype[1]):
+                parseParamMarked(symBody, ptype)
+            )
             
           elif
             (ptype.kind == nnkIdent and cmpIgnoreStyle(ptype.strVal, "CookieJar") == 0) or
@@ -135,11 +137,11 @@ macro route*(app: untyped, route: string, meth: untyped, procedure: untyped): un
   var returnType = procedure.params[0]
 
   if returnType.kind == nnkBracketExpr and returnType[0].strVal == "Future":
-    procCall = newCall(ident("await"), procCall)
+    procCall = genAst(procCall): await procCall
     returnType = returnType[1]
 
   if returnType.strVal == "string":
-    procCall = newCall(ident("respText"), ident("Http200"), procCall)
+    procCall = genAst(procCall): respText(Http200, procCall)
   elif returnType.strVal != "Response":
     error "return type needs to be one of: Response, Future[Response], string, Future[string]"
     return
@@ -148,22 +150,22 @@ macro route*(app: untyped, route: string, meth: untyped, procedure: untyped): un
 
   let addHandler =
     if needsCookies:
-      genAst(app, meth, paramIdents, routingPattern, procCall, symMeth, symPath, symBody, symCookieStr, symCookieJar, symProcResp):
-        app.handlers.add(proc(symMeth: HttpMethod, symPath: seq[string], symBody: string, symCookieStr: string): Future[Option[Response]] {.async.} =
-          if symMeth == meth:
-            if routingPattern ?= symPath:
-              var symCookieJar = parseCookies(symCookieStr)
+      genAst(app, methVal = meth, paramIdents, routingPattern, procCall, symBody, symCookieJar):
+        app.handlers.add(proc(meth: HttpMethod, path: seq[string], symBody: string, cookieStr: string): Future[Option[Response]] {.async.} =
+          if meth == methVal:
+            if routingPattern ?= path:
+              var symCookieJar = parseCookies(cookieStr)
               paramIdents
-              var symProcResp = procCall
-              symProcResp.headers = symProcResp.headers.withCookies(symCookieJar)
-              return some(symProcResp)
+              var resp = procCall
+              resp.headers = resp.headers.withCookies(symCookieJar)
+              return some(resp)
           return none(Response)
         )
     else:
-      genAst(app, meth, paramIdents, routingPattern, procCall, symMeth, symPath, symBody):
-        app.handlers.add(proc(symMeth: HttpMethod, symPath: seq[string], symBody: string, _: string): Future[Option[Response]] {.async.} =
-          if symMeth == meth:
-            if routingPattern ?= symPath:
+      genAst(app, methVal = meth, paramIdents, routingPattern, procCall, symBody):
+        app.handlers.add(proc(meth: HttpMethod, path: seq[string], symBody: string, _: string): Future[Option[Response]] {.async.} =
+          if meth == methVal:
+            if routingPattern ?= path:
               paramIdents
               return some(procCall)
           return none(Response)
@@ -200,10 +202,7 @@ macro ajax*(app: untyped, path: string, procedure: untyped): untyped =
   let meth = ident("HttpPost")
 
   # handler lambda param idents
-  let
-    symMeth = genSym(nskParam, "meth")
-    symPath = genSym(nskParam, "path")
-    symBody = genSym(nskParam, "body")
+  let symBody = genSym(nskParam, "body")
 
 
   var pathSeq = path.strVal[1 .. ^1].split('/')
@@ -234,37 +233,27 @@ macro ajax*(app: untyped, path: string, procedure: untyped): untyped =
           procCall.add(param)
           j += 1
 
-      #[
-        {{param tuple}} =
-          try: deserialize(body, {{type tuple}})
-          except: return none(string)
-      ]#
       nnkLetSection.newTree(
         paramAssign.add(
           newEmptyNode(),
-          nnkTryStmt.newTree(
-            newStmtList(ajaxDeserializeCall(symBody, paramParsing)),
-            nnkExceptBranch.newTree(newStmtList(
-              nnkReturnStmt.newTree(
-                newCall(ident("none"), ident("Response"))
-              )
-            ))
-          )
+          block: genAst(symBody, paramParsing):
+            try: fromJson(symBody, paramParsing)
+            except: return none(Response)
         )
       )
 
   # if proc returns Future need await call
   let returnType = procedure.params[0]
   if returnType.kind == nnkBracketExpr and returnType[0].strVal == "Future":
-    procCall = newCall(ident("await"), procCall)
-  procCall = ajaxSerializeCall(procCall)
+    procCall = genAst(procCall): await procCall
+  procCall = genAst(procCall): toJson(procCall)
 
 
   # ---- add handler to app ----
 
-  let addHandler = genAst(app, meth, paramIdents, pathPattern, procCall, symMeth, symPath, symBody):
-    app.handlers.add(proc(symMeth: HttpMethod, symPath: seq[string], symBody: string, _: string): Future[Option[Response]] {.async.} =
-      if symMeth == meth and symPath == pathPattern:
+  let addHandler = genAst(app, methVal = meth, paramIdents, pathPattern, procCall, symBody):
+    app.handlers.add(proc(meth: HttpMethod, path: seq[string], symBody: string, _: string): Future[Option[Response]] {.async.} =
+      if methVal == meth and path == pathPattern:
         paramIdents
         return some(respText(Http200, procCall))
       return none(Response)
