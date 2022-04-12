@@ -1,4 +1,4 @@
-import std/[httpcore, options, sequtils, strutils]
+import std/[httpcore, sequtils, strutils]
 
 type
   ResponseKind* = enum respHtml, respOther

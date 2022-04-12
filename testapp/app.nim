@@ -38,20 +38,39 @@ server:
   func testDefault(a: string, b = "b", c = "c"): string {.get(app, "/dtestab/{a}/{b}"), get(app, "/dtestac/{a}/{c}").} =
     a & b & c
  
-  func bodyParsingTest1(x: Body[int]): string {.get(app, "/testbody").} =
+  func bodyParsingTest(x: Body[int]): string {.get(app, "/testbody").} =
     if x < 0: "negative"
     else: "positive"
-
-  type TestType = enum testA, testB
-  func bodyParsingTest2(x: Body[Json[TestType]]): string {.get(app, "/testjson").} =
-    case x:
-      of testA: "a"
-      of testB: "b"
 
 
   proc testCookies(cookies: var CookieJar): string {.get(app, "/cookies").} =
     cookies.del("cookieA")
     cookies["cookieB"] = "foo"
+    "ok"
+
+
+  type
+    TestEnum = enum teA, teB
+    TestObj = object
+      case kind: TestEnum
+        of teA: a: int
+        of teB: b: float
+      c: string
+
+  proc testJson(obj: Body[Json[TestObj]]): string {.get(app, "/json").} =
+    case obj.kind
+      of teA: "a+1=" & $(obj.a + 1) & ", c=" & obj.c
+      of teB: "b/2=" & ($(obj.b / 2.0))[0 .. 3] & ", c=" & obj.c
+
+
+  type FormTest = object
+    a: int
+    b: float
+    c: string
+    d: TestEnum
+
+  proc testForm(data: Form[FormTest]): string {.get(app, "/form"), post(app, "/form").} =
+    echo data
     "ok"
 
 

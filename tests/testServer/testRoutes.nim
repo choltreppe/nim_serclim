@@ -8,20 +8,20 @@ import serclim/server/cookies
 var app = newServerApp(clientPath = "client.js")
 
 
-proc testRoutes(meth: HttpMethod, path: seq[string], body, cookieStr = "", expectText: string, expectHeaders: RespHeaders = @[]): bool =
+proc testRoutes(meth: HttpMethod, path: seq[string], body, queryStr = "", cookieStr = "", expectText: string, expectHeaders: RespHeaders = @[]): bool =
   for id in 0 ..< app.handlers.len:
-    if Some(@res) ?= waitFor(app.handlers[id](meth, path, body, cookieStr)):
+    if Some(@res) ?= waitFor(app.handlers[id](meth, path, body, queryStr, cookieStr)):
       return res.kind == respOther and res.text == expectText and res.headers == expectHeaders
   false
 
 proc testRouteNone(id: uint, meth: HttpMethod, path: seq[string]): bool =
-  case waitFor(app.handlers[id](meth, path, "", "")):
+  case waitFor(app.handlers[id](meth, path, "", "", "")):
     of None(Response): true
     else:              false
 
 
 
-proc testRoutePragma(p1,p2: string): string {.route(app, "/routepragma/{p1}/{p2}", HttpGet).} =
+func testRoutePragma(p1,p2: string): string {.route(app, "/routepragma/{p1}/{p2}", HttpGet).} =
   "p1: " & p1 & ", p2: " & p2
 
 test "routing: route pragma":
@@ -30,10 +30,10 @@ test "routing: route pragma":
 
 
 
-proc testGet(a,b: string): string {.get(app, "/testget/{a}/{b}").} =
+func testGet(a,b: string): string {.get(app, "/testget/{a}/{b}").} =
   "a: " & a & ", b: " & b
 
-proc testPost(a,b: string): string {.post(app, "/testpost/{a}/{b}").} =
+func testPost(a,b: string): string {.post(app, "/testpost/{a}/{b}").} =
   "a: " & a & ", b: " & b
 
 test "routing: get/post pragma":
@@ -42,13 +42,13 @@ test "routing: get/post pragma":
 
 
 
-proc testParse1(a,b: uint): string {.get(app, "/parse1/{a}/{b}").} =
+func testParse1(a,b: uint): string {.get(app, "/parse1/{a}/{b}").} =
   $(a + b)
 
-proc testParse2(a,b: int64, c: string): string {.get(app, "/parse2/{a}/{b}/str/{c}").} =
+func testParse2(a,b: int64, c: string): string {.get(app, "/parse2/{a}/{b}/str/{c}").} =
   "a*b=" & $(a*b) & ", c=" & c
 
-proc testParse3(x: 1 .. 6): string {.get(app, "/parse3/{x}").} =
+func testParse3(x: 1 .. 6): string {.get(app, "/parse3/{x}").} =
   $x
 
 test "routing: parsing parameters":
@@ -82,7 +82,7 @@ test "routing: default values":
 
 
 
-proc testResponse1: Response {.get(app, "/response1").} =
+func testResponse1: Response {.get(app, "/response1").} =
   respText(Http200, "test")
 
 proc testResponse2: Future[Response] {.async, get(app, "/response2").} =
@@ -132,6 +132,25 @@ proc testJson2(e: Json[TestEnum]): string {.get(app, "/json2/{e}").} =
 test "routing: parsing json":
   check testRoutes(HttpGet, @["json"], TestObj(kind: teA, a: 2, c: "x").toJson, expectText = "a+1=3, c=x")
   check testRoutes(HttpGet, @["json2", teA.toJson], expectText = "a")
+
+
+
+type
+  Op = enum opAdd, opSub
+  Calc = object
+    op: Op
+    left, right: int
+
+func testForm1(calc: Form[Calc]): string {.get(app, "/form1"), post(app, "/form1").} =
+  case calc.op
+  of opAdd: $(calc.left + calc.right)
+  of opSub: $(calc.left - calc.right)
+
+test "routing: form":
+  check testRoutes(HttpPost, @["form1"], body     = "op=opAdd&left=2&right=3", expectText = "5")
+  check testRoutes(HttpPost, @["form1"], body     = "op=opSub&left=5&right=6", expectText = "-1")
+  check testRoutes(HttpGet , @["form1"], queryStr = "op=opAdd&left=2&right=3", expectText = "5")
+  check testRoutes(HttpGet , @["form1"], queryStr = "op=opSub&left=5&right=6", expectText = "-1")
 
 
 

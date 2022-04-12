@@ -185,6 +185,13 @@ proc addUser(user: Body[Json[User]]): string {.post(app, "/user/add").}
   ""
 ```
 
+### Form Data
+To handle form data you can use the `Form[T]` type.<br>
+Where `T` needs to be a object type.<br>
+The fields of the form get parsed the same way the normal proc params get parsed.<br>
+That means custom parsers difined with `parseParam` work there as well.<br>
+Currently variant types are not supported.
+
 ### CookieJar
 
 If you want to handle cookies you can use a `CookieJar` parameter.<br>
@@ -205,7 +212,7 @@ proc cookieStuff(cookies: var CookieJar): string {.get(app, "/cookies").} =
   ""
 ```
 
-### Response
+## Response
 
 Posible return types are: `string`, `Response`, `Future[string]` or `Future[Response]`.<br>
 Ẁhen a `string` is returned, the content is returned as text with code 200 ok.<br>

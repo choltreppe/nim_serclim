@@ -1,6 +1,5 @@
 import std/options
 import std/tables
-import std/marshal
 import std/httpcore
 import std/asynchttpserver
 import std/asyncdispatch
@@ -23,7 +22,14 @@ type
     staticPath: string
     clientPath: string
     port: int
-    handlers*: seq[proc(meth: HttpMethod, path: seq[string], body: string, cookieStr: string): Future[Option[Response]] {.async, closure.}]
+    handlers*: seq[proc(
+      meth: HttpMethod,
+      pathSeq: seq[string],
+      body: string,
+      queryStr: string,
+      cookieStr: string):
+      Future[Option[Response]] {.async, closure.}
+    ]
     headers: tuple[text,html: RespHeaders]
 
 let defaultHeaders: tuple[text,html: RespHeaders] = (
@@ -41,24 +47,24 @@ proc run*(app: ServerApp) =
     var server = newAsyncHttpServer()
     
     proc cb(req: Request) {.async, gcsafe.} =
-      
       try:
-        let path_rel = req.url.path[1 .. ^1]
+
+        let relPath  = req.url.path[1 .. ^1]
         
-        if path_rel == app.clientPath:
+        # serve client js script
+        if relPath == app.clientPath:
           await req.respond(Http200, readFile(app.clientPath))
           return
 
-        if path_rel.startsWith(app.staticPath):
+        if relPath.startsWith(app.staticPath):
           try:
-            let content = readFile(path_rel)
+            let content = readFile(relPath)
             await req.respond(Http200, content)
           except:
             await req.respond(Http404, "Page not found")
           return
 
-
-        let path = path_rel.split('/')
+        let pathSeq = relPath.split('/')
 
         let headers = req.headers.table
         let cookieStr =
@@ -69,7 +75,7 @@ proc run*(app: ServerApp) =
           else: ""
 
         for i in 0 ..< app.handlers.len:
-          if Some(@resp) ?= await app.handlers[i](req.reqMethod, path, req.body, cookieStr):
+          if Some(@resp) ?= await app.handlers[i](req.reqMethod, pathSeq, req.body, req.url.query, cookieStr):
             await req.respond(
               resp.code,
               case resp.kind:

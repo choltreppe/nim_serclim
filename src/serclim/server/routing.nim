@@ -9,11 +9,12 @@ import fusion/matching
 
 
 type
-  Body*[T] = T
-  Json*[T] = T
   AnyInt   =  int |  int8 |  int16 |  int32 |  int64
   AnyUInt  = uint | uint8 | uint16 | uint32 | uint64
   AnyFloat = float | float32 | float64
+  Json*[T] = T
+  Body*[T] = T
+  Form*[T] = T
 
 func parseParam*[T: string  ](s: string, _: typedesc[T]): T = s
 
@@ -21,10 +22,10 @@ func parseParam*[T: AnyInt  ](s: string, _: typedesc[T]): T = s.parseInt.T
 
 func parseParam*[T: AnyUInt ](s: string, _: typedesc[T]): T = s.parseUInt.T
 
+func parseParam*[T: AnyFloat](s: string, _: typedesc[T]): T = s.parseFloat.T
+
 func parseParam*[T: range   ](s: string, _: typedesc[T]): T = s.parseInt.T
 template parseParam*(s: string, r: HSlice): untyped = parseParam(s, range[r])
-
-func parseParam*[T: AnyFloat](s: string, _: typedesc[T]): T = s.parseFloat.T
 
 func parseParam*[T: enum    ](s: string, _: typedesc[T]): T = parseEnum[T](s)
 
@@ -36,6 +37,16 @@ macro parseParamMarked(s: string, t: untyped): untyped =
     genAst(s, t): parseParam(s, t)
 
 
+proc parseForm*[T: object](s: string, _: typedesc[T]): T =
+  var strValTable: Table[string, string]
+  for pairStr in s.split("&"):
+    let pair = pairStr.split("=")
+    strValTable[pair[0]] = pair[1]
+  for name, val in result.fieldPairs:
+    if name in strValTable:
+      val = parseParam(strValTable[name], type(val))
+
+
 
 macro route*(app: untyped, route: string, meth: untyped, procedure: untyped): untyped =
   procedure.expectKind({nnkProcDef, nnkFuncDef})
@@ -45,19 +56,15 @@ macro route*(app: untyped, route: string, meth: untyped, procedure: untyped): un
 
   let
     symBody = genSym(nskParam, "body")
+    symQueryStr = genSym(nskParam, "queryStr")
     symCookieJar = genSym(nskVar, "cookieJar")
 
   # ---- gen routing pattern ----
 
   var editRoute = route.strVal
+
   if editRoute[0] == '/':
     editRoute.delete(0 .. 0)
-
-  let open =
-    if editRoute.len >= 1 and editRoute[^1] == '*':
-      editRoute = editRoute[0 ..< ^1]
-      true
-    else: false
 
   if editRoute.len >= 1 and editRoute[^1] == '/':
     editRoute = editRoute[0 ..< ^1]
@@ -75,8 +82,6 @@ macro route*(app: untyped, route: string, meth: untyped, procedure: untyped): un
       else:
         newStrLitNode(relem)
     )
-
-  if open: routingPattern.add(prefix(ident("_"), ".."))
 
   # ---- gen type casting for params  &  proc call ----
 
@@ -98,16 +103,24 @@ macro route*(app: untyped, route: string, meth: untyped, procedure: untyped): un
           else: typeOfLit(p[^1])
         for pname in p[0 ..< ^2]:
           if routeParams.contains(pname.strVal):
-            paramParsing.add(block:
+            paramParsing.add:
               genAst(pname = pname.paramIdentStr, ptype):
                 parseParamMarked(pname, ptype)
-            )
 
           elif ptype.kind == nnkBracketExpr and cmpIgnoreStyle(ptype[0].strVal, "Body") == 0:
-            paramParsing.add(block:
+            paramParsing.add:
               genAst(symBody, ptype = ptype[1]):
                 parseParamMarked(symBody, ptype)
-            )
+
+          elif ptype.kind == nnkBracketExpr and cmpIgnoreStyle(ptype[0].strVal, "Form") == 0:
+            paramParsing.add:
+              genAst(symBody, symQueryStr, meth, ptype = ptype[1]):
+                parseForm(
+                  when meth == HttpPost: symBody
+                  else:                  symQueryStr 
+                  ,
+                  ptype
+                )
             
           elif
             (ptype.kind == nnkIdent and cmpIgnoreStyle(ptype.strVal, "CookieJar") == 0) or
@@ -150,8 +163,8 @@ macro route*(app: untyped, route: string, meth: untyped, procedure: untyped): un
 
   let addHandler =
     if needsCookies:
-      genAst(app, methVal = meth, paramIdents, routingPattern, procCall, symBody, symCookieJar):
-        app.handlers.add(proc(meth: HttpMethod, path: seq[string], symBody: string, cookieStr: string): Future[Option[Response]] {.async.} =
+      genAst(app, methVal = meth, paramIdents, routingPattern, procCall, symBody, symQueryStr, symCookieJar):
+        app.handlers.add(proc(meth: HttpMethod, path: seq[string], symBody, symQueryStr, cookieStr: string): Future[Option[Response]] {.async.} =
           if meth == methVal:
             if routingPattern ?= path:
               var symCookieJar = parseCookies(cookieStr)
@@ -162,15 +175,15 @@ macro route*(app: untyped, route: string, meth: untyped, procedure: untyped): un
           return none(Response)
         )
     else:
-      genAst(app, methVal = meth, paramIdents, routingPattern, procCall, symBody):
-        app.handlers.add(proc(meth: HttpMethod, path: seq[string], symBody: string, _: string): Future[Option[Response]] {.async.} =
+      genAst(app, methVal = meth, paramIdents, routingPattern, procCall, symBody, symQueryStr):
+        app.handlers.add(proc(meth: HttpMethod, path: seq[string], symBody, symQueryStr, cookieStr: string): Future[Option[Response]] {.async.} =
           if meth == methVal:
             if routingPattern ?= path:
               paramIdents
               return some(procCall)
           return none(Response)
         )
-  
+
   newStmtList(procedure, addHandler)
 
 
@@ -252,7 +265,7 @@ macro ajax*(app: untyped, path: string, procedure: untyped): untyped =
   # ---- add handler to app ----
 
   let addHandler = genAst(app, methVal = meth, paramIdents, pathPattern, procCall, symBody):
-    app.handlers.add(proc(meth: HttpMethod, path: seq[string], symBody: string, _: string): Future[Option[Response]] {.async.} =
+    app.handlers.add(proc(meth: HttpMethod, path: seq[string], symBody: string, queryStr,cookieStr: string): Future[Option[Response]] {.async.} =
       if methVal == meth and path == pathPattern:
         paramIdents
         return some(respText(Http200, procCall))
