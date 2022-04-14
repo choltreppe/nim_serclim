@@ -2,7 +2,7 @@ import serclim
 
 server:
   import htmlgen
-  import serclim/server/cookies
+  import serclim/server/[cookies, staticFiles]
   import strformat
 
 client:
@@ -15,20 +15,23 @@ server:
 
   var app = newServerApp(clientPath = "client.js")
 
+  app.serveStaticFiles("static")
+
   proc add(a,b: int): int {. ajax(app, "/ajax/add") .} =
     a + b
 
   proc addGui: Response {. get(app, "/add") .} =
     respOk(
-      link(rel="stylesheet", `type`="text/css", href="/static/style.css"),
-      form(
-        onsubmit="event.preventDefault(); calc(this)",
-        input(type="text", name="a"),
-        "+",
-        input(type="text", name="b"),
-        button("calc"),
-        p(id="result")
-      )
+      head = link(rel="stylesheet", `type`="text/css", href="/static/style.css"),
+      body =
+        form(
+          onsubmit="event.preventDefault(); calc(this)",
+          input(type="text", name="a"),
+          "+",
+          input(type="text", name="b"),
+          button("calc"),
+          p(id="result")
+        )
     )
 
   proc addUrl(a,b: int): string {. get(app, "/add/{a}/{b}") .} =

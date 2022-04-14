@@ -11,6 +11,7 @@ Heres a short example illustrating some of the features, explained in detail bel
 import serclim
 
 server:
+  import serclim/server/staticFiles
   import htmlgen
 
 client:
@@ -23,20 +24,23 @@ server:
 
   var app = newServerApp(clientPath = "client.js")
 
+  app.serveStaticFiles("static")
+
   func add(a,b: int): int {. ajax(app, "/ajax/add") .} =
     a + b
 
   proc addGui: Response {. get(app, "/add") .} =
     respOk(
-      link(rel="stylesheet", `type`="text/css", href="/static/style.css"),
-      form(
-        onsubmit="event.preventDefault(); calc(this)",
-        input(type="text", name="a"),
-        "+",
-        input(type="text", name="b"),
-        button("calc"),
-        p(id="result")
-      )
+      head = link(rel="stylesheet", `type`="text/css", href="/static/style.css"),
+      body =
+        form(
+          onsubmit="event.preventDefault(); calc(this)",
+          input(type="text", name="a"),
+          "+",
+          input(type="text", name="b"),
+          button("calc"),
+          p(id="result")
+        )
     )
 
   run app
@@ -231,6 +235,7 @@ For parameters an return type **all types** are supported.
 import serclim
 
 server:
+  import serclim/server/staticFiles
   import htmlgen
 
 client:
@@ -243,20 +248,23 @@ server:
 
   var app = newServerApp(clientPath = "client.js")
 
+  app.serveStaticFiles("static")
+
   func add(a,b: int): int {. ajax(app, "/ajax/add") .} =
     a + b
 
   proc addGui: Response {. get(app, "/add") .} =
     respOk(
-      link(rel="stylesheet", `type`="text/css", href="/static/style.css"),
-      form(
-        onsubmit="event.preventDefault(); calc(this)",
-        input(type="text", name="a"),
-        "+",
-        input(type="text", name="b"),
-        button("calc"),
-        p(id="result")
-      )
+      head = link(rel="stylesheet", `type`="text/css", href="/static/style.css"),
+      body =
+        form(
+          onsubmit="event.preventDefault(); calc(this)",
+          input(type="text", name="a"),
+          "+",
+          input(type="text", name="b"),
+          button("calc"),
+          p(id="result")
+        )
     )
 
   run app
@@ -270,4 +278,10 @@ client:
       ($this.elements[1].value).parseInt
     )
     document.getElementById("result").innerHTML = res.`$`.cstring
+```
+
+## Static Content
+```nim
+import serclim/server/staticFiles
+app.serveStaticFiles("static")
 ```

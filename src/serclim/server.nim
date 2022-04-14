@@ -19,9 +19,9 @@ macro server*(body: untyped): untyped = body
 
 type
   ServerApp* = object
-    staticPath: string
     clientPath: string
     port: int
+    headers: tuple[text,html: RespHeaders]
     handlers*: seq[proc(
       meth: HttpMethod,
       pathSeq: seq[string],
@@ -30,7 +30,6 @@ type
       cookieStr: string):
       Future[Option[Response]] {.async, closure.}
     ]
-    headers: tuple[text,html: RespHeaders]
 
 let defaultHeaders: tuple[text,html: RespHeaders] = (
   @[("Content-type", "text/plain; charset=utf-8")],
@@ -38,8 +37,8 @@ let defaultHeaders: tuple[text,html: RespHeaders] = (
 )
 
 
-func newServerApp*(clientPath: string, staticPath = "static", port = 8080, headers = defaultHeaders): ServerApp =
-  ServerApp(staticPath: staticPath, clientPath: clientPath, port: port, headers: headers)
+func newServerApp*(clientPath: string, port = 8080, headers = defaultHeaders): ServerApp =
+  ServerApp(clientPath: clientPath, port: port, headers: headers)
 
 
 proc run*(app: ServerApp) =
@@ -54,14 +53,6 @@ proc run*(app: ServerApp) =
         # serve client js script
         if relPath == app.clientPath:
           await req.respond(Http200, readFile(app.clientPath))
-          return
-
-        if relPath.startsWith(app.staticPath):
-          try:
-            let content = readFile(relPath)
-            await req.respond(Http200, content)
-          except:
-            await req.respond(Http404, "Page not found")
           return
 
         let pathSeq = relPath.split('/')
