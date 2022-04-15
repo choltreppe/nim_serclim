@@ -2,8 +2,7 @@ import serclim
 
 server:
   import htmlgen
-  import serclim/server/[cookies, staticFiles]
-  import strformat
+  import serclim/server/[cookies, staticfiles]
 
 client:
   import std/asyncjs
@@ -13,7 +12,7 @@ client:
 
 server:
 
-  var app = newServerApp(clientPath = "client.js")
+  var app = newServerApp()
 
   app.serveStaticFiles("static")
 
@@ -34,11 +33,11 @@ server:
         )
     )
 
-  proc addUrl(a,b: int): string {. get(app, "/add/{a}/{b}") .} =
+  proc addUrl(a,b: int): string {. get(app, "/add/@a/@b") .} =
     $add(a, b)
 
 
-  func testDefault(a: string, b = "b", c = "c"): string {.get(app, "/dtestab/{a}/{b}"), get(app, "/dtestac/{a}/{c}").} =
+  func testDefault(a: string, b = "b", c = "c"): string {.get(app, "/dtestab/@a/@b"), get(app, "/dtestac/@a/@c").} =
     a & b & c
  
   func bodyParsingTest(x: Body[int]): string {.get(app, "/testbody").} =

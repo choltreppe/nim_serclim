@@ -13,6 +13,4 @@ task test, "run tests":
   exec "nim c -r tests/testServer.nim"
 
 task testapp, "run test app":
-  exec "nim c -o:testapp/app testapp/app.nim"
-  exec "nim js -o:testapp/client.js testapp/app.nim"
-  exec "cd testapp && ./app"
+  exec "nim c -r -d:clientFile=app.js testapp/app.nim"

@@ -1,5 +1,13 @@
-import std/macros
-import std/strutils
+import std/[macros, strutils]
+
+
+const clientFile* {.strdefine.} = "client.js"
+
+
+func `&/`*(a,b: string): string =
+  if   b[0 ] == '/': b
+  elif a[^1] == '/': a & b
+  else             : a & "/" & b
 
 
 proc typeOfLit*(literal: NimNode): NimNode =

@@ -1,5 +1,3 @@
-import serclim/private/common
-
 import std/[macros, genasts]
 import std/[sequtils, dom, asyncjs]
 import ajax

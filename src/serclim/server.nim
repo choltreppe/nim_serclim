@@ -1,12 +1,10 @@
-import std/options
-import std/tables
-import std/httpcore
-import std/asynchttpserver
-import std/asyncdispatch
+import std/[options, tables, os]
+import std/[httpcore, asynchttpserver, asyncdispatch]
 import std/htmlgen
 
-include server/routing
-import server/response
+include serclim/server/routing
+import serclim/server/response
+import serclim/private/common
 
 export strutils, options, asyncdispatch, httpcore
 export response
@@ -19,7 +17,6 @@ macro server*(body: untyped): untyped = body
 
 type
   ServerApp* = object
-    clientPath: string
     port: int
     headers: tuple[text,html: RespHeaders]
     handlers*: seq[proc(
@@ -37,8 +34,8 @@ let defaultHeaders: tuple[text,html: RespHeaders] = (
 )
 
 
-func newServerApp*(clientPath: string, port = 8080, headers = defaultHeaders): ServerApp =
-  ServerApp(clientPath: clientPath, port: port, headers: headers)
+func newServerApp*(port = 8080, headers = defaultHeaders): ServerApp =
+  ServerApp(port: port, headers: headers)
 
 
 proc run*(app: ServerApp) =
@@ -51,8 +48,8 @@ proc run*(app: ServerApp) =
         let relPath  = req.url.path[1 .. ^1]
         
         # serve client js script
-        if relPath == app.clientPath:
-          await req.respond(Http200, readFile(app.clientPath))
+        if relPath == clientFile:
+          await req.respond(Http200, readFile(clientFile))
           return
 
         let pathSeq = relPath.split('/')
@@ -74,7 +71,7 @@ proc run*(app: ServerApp) =
                 of respHtml:
                   html(
                     head(resp.html.head),
-                    body(script(src = ("/" & app.clientPath)), resp.html.body)
+                    body(script(src = ("/" & clientFile)), resp.html.body)
                   )
               ,
               newHttpHeaders(
@@ -104,6 +101,6 @@ proc run*(app: ServerApp) =
         # wait 500ms for FDs to be closed
         await sleepAsync(500)
 
-
+  setCurrentDir(getAppDir())
   waitFor serve()
 

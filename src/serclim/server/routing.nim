@@ -75,8 +75,8 @@ macro route*(app: untyped, route: string, meth: untyped, procedure: untyped): un
   var routeParams: seq[string]
   for relem in routeElems:
     routingPattern.add(
-      if editRoute.len >= 2 and relem[0] == '{' and relem[^1] == '}':
-        let param = relem[1 ..< ^1]
+      if editRoute.len >= 2 and relem[0] == '@':
+        let param = relem[1 .. ^1]
         routeParams.add(param)
         nnkPrefix.newTree(ident("@"), ident(param).paramIdentStr)
       else:

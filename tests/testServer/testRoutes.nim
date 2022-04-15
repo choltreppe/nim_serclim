@@ -5,7 +5,7 @@ import serclim/server/cookies
 
 
 
-var app = newServerApp(clientPath = "client.js")
+var app = newServerApp()
 
 
 proc testRoutes(meth: HttpMethod, path: seq[string], body, queryStr = "", cookieStr = "", expectText: string, expectHeaders: RespHeaders = @[]): bool =
@@ -21,7 +21,7 @@ proc testRouteNone(id: uint, meth: HttpMethod, path: seq[string]): bool =
 
 
 
-func testRoutePragma(p1,p2: string): string {.route(app, "/routepragma/{p1}/{p2}", HttpGet).} =
+func testRoutePragma(p1,p2: string): string {.route(app, "/routepragma/@p1/@p2", HttpGet).} =
   "p1: " & p1 & ", p2: " & p2
 
 test "routing: route pragma":
@@ -30,10 +30,10 @@ test "routing: route pragma":
 
 
 
-func testGet(a,b: string): string {.get(app, "/testget/{a}/{b}").} =
+func testGet(a,b: string): string {.get(app, "/testget/@a/@b").} =
   "a: " & a & ", b: " & b
 
-func testPost(a,b: string): string {.post(app, "/testpost/{a}/{b}").} =
+func testPost(a,b: string): string {.post(app, "/testpost/@a/@b").} =
   "a: " & a & ", b: " & b
 
 test "routing: get/post pragma":
@@ -42,13 +42,13 @@ test "routing: get/post pragma":
 
 
 
-func testParse1(a,b: uint): string {.get(app, "/parse1/{a}/{b}").} =
+func testParse1(a,b: uint): string {.get(app, "/parse1/@a/@b").} =
   $(a + b)
 
-func testParse2(a,b: int64, c: string): string {.get(app, "/parse2/{a}/{b}/str/{c}").} =
+func testParse2(a,b: int64, c: string): string {.get(app, "/parse2/@a/@b/str/@c").} =
   "a*b=" & $(a*b) & ", c=" & c
 
-func testParse3(x: 1 .. 6): string {.get(app, "/parse3/{x}").} =
+func testParse3(x: 1 .. 6): string {.get(app, "/parse3/@x").} =
   $x
 
 test "routing: parsing parameters":
@@ -63,7 +63,7 @@ test "routing: parsing parameters":
 
 
 
-func testMultiRoutes(s: string): string {.get(app, "/multi/{s}"), post(app, "/multi/{s}"), get(app, "/multi/foo/{s}").} =
+func testMultiRoutes(s: string): string {.get(app, "/multi/@s"), post(app, "/multi/@s"), get(app, "/multi/foo/@s").} =
   s
 
 test "routing: multiple routes for one proc":
@@ -73,7 +73,7 @@ test "routing: multiple routes for one proc":
 
 
 
-func testDefaults(a: string, b = "b", c = "c"): string {.get(app, "/default_ab/{a}/{b}"), get(app, "/default_ac/{a}/{c}").} =
+func testDefaults(a: string, b = "b", c = "c"): string {.get(app, "/default_ab/@a/@b"), get(app, "/default_ac/@a/@c").} =
     a & b & c
 
 test "routing: default values":
@@ -101,7 +101,7 @@ test "routing: response types":
 func testBody1(body: Body[string]): string {.get(app, "/body1").} =
   "body: " & body
 
-proc testBody2(a: string, body: Body[int]): string {.get(app, "body2/{a}").} =
+proc testBody2(a: string, body: Body[int]): string {.get(app, "body2/@a").} =
   a & $(body+1)
 
 test "routing: body":
@@ -124,7 +124,7 @@ proc testJson1(obj: Body[Json[TestObj]]): string {.get(app, "/json").} =
     of teA: "a+1=" & $(obj.a + 1) & ", c=" & obj.c
     of teB: "b/2=" & ($(obj.b / 2.0))[0 .. 3] & ", c=" & obj.c
 
-proc testJson2(e: Json[TestEnum]): string {.get(app, "/json2/{e}").} =
+proc testJson2(e: Json[TestEnum]): string {.get(app, "/json2/@e").} =
   result = case e
     of teA: "a"
     of teB: "b"
@@ -159,10 +159,11 @@ type Address = object
   postcode: uint
 
 func parseParam[T: Address](s: string, _: typedesc[T]): T =
-  let lines = s.split("\n")
-  let fullname = lines[0].split(" ")
-  let streetnr = lines[1].split(" ")
-  let citypostal = lines[2].split(" ")
+  let
+    lines = s.split("\n")
+    fullname = lines[0].split(" ")
+    streetnr = lines[1].split(" ")
+    citypostal = lines[2].split(" ")
   Address(
     firstname: fullname[0 ..< ^1].join(" "),
     lastname:  fullname[^1],
