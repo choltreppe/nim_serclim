@@ -2,6 +2,8 @@ import std/[macros, genasts]
 import std/[sequtils, dom, asyncjs]
 import ajax
 
+include shared
+
 
 proc makeRequest*(url: string, data: string): Future[string] =
   return newPromise[string](proc(resolve: proc(response: string)) =
@@ -26,9 +28,6 @@ proc makeRequest*(url: string, data: string): Future[string] =
 
 # --- macros ----
 
-const
-  remotePragma* = "ajax"
-
 
 # keep client
 template client*(body: untyped): untyped = body
@@ -44,17 +43,16 @@ macro server*(body: untyped): untyped =
   :
     if
       (elem.kind == nnkProcDef or elem.kind == nnkFuncDef) and
-      elem.pragma.toSeq.anyIt(it.kind == nnkCall and it[0].strVal == remotePragma)
+      elem.pragma.toSeq.anyIt(it.kind == nnkCall and it[0].strVal == "ajax")
     :
       ajaxProcs.add(elem)
 
-  return ajaxProcs
+  ajaxProcs
 
 
 # make ajax callers
-macro ajax*(app: untyped, path: string, procedure: untyped): untyped =
-  app.expectKind(nnkIdent)
-  procedure.expectKind({nnkProcDef, nnkFuncDef})
+proc makeAjaxProc(app: NimNode, pathSeq: seq[string], procedure: NimNode): NimNode =
+  let path = "/" & pathSeq.join("/")
 
   # proc for manipulating
   var editProc = procedure

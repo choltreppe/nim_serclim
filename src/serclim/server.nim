@@ -45,7 +45,7 @@ proc run*(app: ServerApp) =
     proc cb(req: Request) {.async, gcsafe.} =
       try:
 
-        let relPath  = req.url.path[1 .. ^1]
+        let relPath = req.url.path[1 .. ^1]
         
         # serve client js script
         if relPath == clientFile:
@@ -103,4 +103,3 @@ proc run*(app: ServerApp) =
 
   setCurrentDir(getAppDir())
   waitFor serve()
-

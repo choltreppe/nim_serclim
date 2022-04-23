@@ -1,11 +1,11 @@
-import serclim/private/common
-
 import jsony
 import std/[macros, genasts]
 import std/[sequtils, strutils]
-
 import fusion/matching
 {.experimental: "caseStmtMacros".}
+
+import serclim/private/common
+include ../shared
 
 
 type
@@ -48,6 +48,15 @@ proc parseForm*[T: object](s: string, _: typedesc[T]): T =
 
 
 
+proc typeOfLit*(literal: NimNode): NimNode =
+  let litTypeStr = ($literal.kind)[3 ..< ^3].toLower
+  ident(
+    if litTypeStr.endsWith("str"): "string"
+    else: litTypeStr
+  )
+
+
+
 macro route*(app: untyped, route: string, meth: untyped, procedure: untyped): untyped =
   procedure.expectKind({nnkProcDef, nnkFuncDef})
 
@@ -61,21 +70,16 @@ macro route*(app: untyped, route: string, meth: untyped, procedure: untyped): un
 
   # ---- gen routing pattern ----
 
-  var editRoute = route.strVal
+  let routeElems = route.strVal.getPathSeq
 
-  if editRoute[0] == '/':
-    editRoute.delete(0 .. 0)
-
-  if editRoute.len >= 1 and editRoute[^1] == '/':
-    editRoute = editRoute[0 ..< ^1]
-
-  let routeElems = editRoute.split('/')
+  if routeElems.len > 0 and routeElems[0] == ajaxAnonymousPath:
+    error fmt"routes starting with '{ajaxAnonymousPath}' are reserved for ananymous ajax procs"
 
   var routingPattern = newNimNode(nnkBracket)
   var routeParams: seq[string]
   for relem in routeElems:
     routingPattern.add(
-      if editRoute.len >= 2 and relem[0] == '@':
+      if relem.len > 0 and relem[0] == '@':
         let param = relem[1 .. ^1]
         routeParams.add(param)
         nnkPrefix.newTree(ident("@"), ident(param).paramIdentStr)
@@ -207,10 +211,7 @@ macro post*(app: untyped, route: string, procedure: untyped): untyped =
 
 
 
-
-macro ajax*(app: untyped, path: string, procedure: untyped): untyped =
-  procedure.expectKind({nnkProcDef, nnkFuncDef})
-
+proc makeAjaxProc(app: NimNode, pathSeq: seq[string], procedure: NimNode): NimNode =
   # for now always POST. probably later choosable
   let meth = ident("HttpPost")
 
@@ -218,7 +219,6 @@ macro ajax*(app: untyped, path: string, procedure: untyped): untyped =
   let symBody = genSym(nskParam, "body")
 
 
-  var pathSeq = path.strVal[1 .. ^1].split('/')
   var pathPattern = newNimNode(nnkBracket)
   for elem in 
     if pathSeq[^1] == "": pathSeq[0 ..< ^1]
@@ -274,19 +274,3 @@ macro ajax*(app: untyped, path: string, procedure: untyped): untyped =
 
   # return original proc and the call to add route to app
   newStmtList(procedure, addHandler)
-
-
-#[var ajax_anonymous_index {.compiletime.} = 0
-
-macro ajax*(app: untyped, procedure: untyped): untyped =
-  procedure.expectKind({nnkProcDef, nnkFuncDef})
-  let ajax_pragma = newCall(ident("ajax"), app, newStrLitNode("ajax_call_" & $ajax_anonymous_index))
-  ajax_anonymous_index += 1
-  var editProcedure = procedure
-  editProcedure.pragma = 
-    if editProcedure.pragma.kind == nnkEmpty:
-      nnkPragma.newTree(ajax_pragma)
-    else:
-      editProcedure.pragma.add(ajax_pragma)
-  editProcedure
-]#

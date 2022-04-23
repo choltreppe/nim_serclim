@@ -16,8 +16,8 @@ server:
 
   app.serveStaticFiles("static")
 
-  proc add(a,b: int): int {. ajax(app, "/ajax/add") .} =
-    a + b
+  proc add(a,b: int  ): int   {. ajax(app) .} = a + b
+  proc add(a,b: float): float {. ajax(app) .} = a + b
 
   proc addGui: Response {. get(app, "/add") .} =
     respOk(
@@ -82,9 +82,17 @@ server:
 client:
 
   proc calc(this: FormElement) {.async, exportc.} =
-    let res = await add(
-      ($this.elements[0].value).parseInt,
-      ($this.elements[1].value).parseInt
-    )
-    document.getElementById("result").innerHTML = res.`$`.cstring
+    let res =
+      try:
+        await(add(
+          ($this.elements[0].value).parseInt,
+          ($this.elements[1].value).parseInt
+        )).`$`.cstring
+      except:
+        await(add(
+          ($this.elements[0].value).parseFloat,
+          ($this.elements[1].value).parseFloat
+        )).`$`.cstring
+
+    document.getElementById("result").innerHTML = res
 

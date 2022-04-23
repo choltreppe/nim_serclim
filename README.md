@@ -233,43 +233,18 @@ Take a look at `serclim/server/response.nim`
 If you want to call a proc that is only compiled to server from client side you can use the `ajax(app, path)` pragama.<br>
 A proc/func with an ajax pragma can be called from client side just as if it was client-side code. Except that the return type is a Future of the original type, if it inst already a Future.<br>
 For parameters an return type **all types** are supported.
+
+Its demonstarted in the example on the top. Here the ajax part of the example:
 ```nim
-import serclim
+...
 
 server:
-  import serclim/server/staticfiles
-  import htmlgen
-
-client:
-  import std/asyncjs
-  import std/dom
-  import strutils
-
-
-server:
-
-  var app = newServerApp()
-
-  app.serveStaticFiles("static")
+  ...
 
   func add(a,b: int): int {. ajax(app, "/ajax/add") .} =
     a + b
 
-  proc addGui: Response {. get(app, "/add") .} =
-    respOk(
-      head = link(rel="stylesheet", `type`="text/css", href="/static/style.css"),
-      body =
-        form(
-          onsubmit="event.preventDefault(); calc(this)",
-          input(type="text", name="a"),
-          "+",
-          input(type="text", name="b"),
-          button("calc"),
-          p(id="result")
-        )
-    )
-
-  run app
+  ...
 
 
 client:
@@ -281,6 +256,13 @@ client:
     )
     document.getElementById("result").innerHTML = res.`$`.cstring
 ```
+
+If you don't care about the path being used for the call, you can ommit it.
+```nim
+func add(a,b: int): int {. ajax(app) .} =
+  a + b
+```
+
 
 ## Static Content
 ```nim

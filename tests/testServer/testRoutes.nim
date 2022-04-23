@@ -101,7 +101,7 @@ test "routing: response types":
 func testBody1(body: Body[string]): string {.get(app, "/body1").} =
   "body: " & body
 
-proc testBody2(a: string, body: Body[int]): string {.get(app, "body2/@a").} =
+proc testBody2(a: string, body: Body[int]): string {.get(app, "/body2/@a").} =
   a & $(body+1)
 
 test "routing: body":
