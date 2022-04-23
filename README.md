@@ -89,8 +89,8 @@ proc example() {.server.} = discard  # also server-side
 
 ## Server
 to make a new server use `func newServerApp*(port = 8080, headers = defaultHeaders): ServerApp`<br>
-Where `headers` is a `tuple[text, html: seq[(string, string)]]`. It defines default headers for html and text responses. ()
-and start the server with `run(app: ServerApp)`<br>
+Where `headers` is a `tuple[text, html: seq[(string, string)]]`. It defines default headers for html and text responses.<br>
+start the server with `run(app: ServerApp)`<br>
 inbetween creating and starting the server you can define different routes for functions and define functions as remote callable.
 
 ## Routing
