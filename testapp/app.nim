@@ -16,8 +16,8 @@ server:
 
   app.serveStaticFiles("static")
 
-  proc add(a,b: int  ): int   {. ajax(app) .} = a + b
-  proc add(a,b: float): float {. ajax(app) .} = a + b
+  proc add(a,b: int  ): int   {.ajax(app).} = a + b
+  proc add(a,b: float): float {.ajax(app).} = a + b
 
   proc addGui: Response {. get(app, "/add") .} =
     respOk(

@@ -1,10 +1,8 @@
 import jsony
-import std/[macros, genasts]
-import std/[sequtils, strutils]
+import std/[macros, genasts, sequtils]
 import fusion/matching
 {.experimental: "caseStmtMacros".}
 
-import serclim/private/common
 include ../shared
 
 

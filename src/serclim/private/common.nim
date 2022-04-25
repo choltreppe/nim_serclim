@@ -1,1 +1,0 @@
-const clientFile* {.strdefine.} = "client.js"

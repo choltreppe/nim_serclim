@@ -1,10 +1,9 @@
-import std/[options, tables, os]
+import std/[options, tables, os, compilesettings]
 import std/[httpcore, asynchttpserver, asyncdispatch]
 import std/htmlgen
 
 include serclim/server/routing
 import serclim/server/response
-import serclim/private/common
 
 export strutils, options, asyncdispatch, httpcore
 export response
@@ -13,6 +12,21 @@ export response
 # ignore client. keep server
 macro client*(_: untyped): untyped = discard
 macro server*(body: untyped): untyped = body
+
+
+const clientFile {.strdefine.} = "client.js"
+const clientCode = block:
+  if clientFile == "": ""
+  else:
+    let clientPath = querySetting(projectPath) / clientFile
+    let compileDefines = querySetting(commandLine).split(" ").filterIt(it.startsWith("-d:")).join(" ")
+    discard staticExec(fmt"nim js -o:{clientPath} {compileDefines} {querySetting(projectFull)}")
+    let code = staticRead(clientPath)
+    let rmCmd =
+      if defined(windows): "del"
+      else:                "rm"
+    discard staticExec(fmt"{rmCmd} {clientPath}")
+    code
 
 
 type
@@ -49,7 +63,7 @@ proc run*(app: ServerApp) =
         
         # serve client js script
         if relPath == clientFile:
-          await req.respond(Http200, readFile(clientFile))
+          await req.respond(Http200, clientCode)
           return
 
         let pathSeq = relPath.split('/')

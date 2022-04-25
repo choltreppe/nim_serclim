@@ -10,7 +10,8 @@ requires "jsony >= 1.1.3"
 
 
 task test, "run tests":
-  exec "nim c -r tests/testServer.nim"
+  exec "nim c -r -d:clientFile= tests/testServer.nim"
 
 task testapp, "run test app":
-  exec "nim c -r -d:clientFile=app.js testapp/app.nim"
+  exec "nim c testapp/app.nim"
+  exec "./testapp/app"
